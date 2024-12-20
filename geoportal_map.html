@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    
+        <script>
+            L_NO_TOUCH = false;
+            L_DISABLE_3D = false;
+        </script>
+    
+    <style>html, body {width: 100%;height: 100%;margin: 0;padding: 0;}</style>
+    <style>#map {position:absolute;top:0;bottom:0;right:0;left:0;}</style>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_4e3b41135f60fc1a7224f14dec044ef0 {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+        
+    <script src="https://cdn.jsdelivr.net/gh/python-visualization/folium@main/folium/templates/leaflet_heat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.2/leaflet.draw.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.2/leaflet.draw.css"/>
+    
+            <style>
+                #export {
+                    position: absolute;
+                    top: 5px;
+                    right: 10px;
+                    z-index: 999;
+                    background: white;
+                    color: black;
+                    padding: 6px;
+                    border-radius: 4px;
+                    font-family: 'Helvetica Neue';
+                    cursor: pointer;
+                    font-size: 12px;
+                    text-decoration: none;
+                    top: 90px;
+                }
+            </style>
+        
+</head>
+<body>
+    
+    
+            <div class="folium-map" id="map_4e3b41135f60fc1a7224f14dec044ef0" ></div>
+        
+    <a href='#' id='export'>Export</a>
+</body>
+<script>
+    
+    
+            var map_4e3b41135f60fc1a7224f14dec044ef0 = L.map(
+                "map_4e3b41135f60fc1a7224f14dec044ef0",
+                {
+                    center: [55.751244, 37.618423],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "maxBounds": null,
+  "zoom": 10,
+  "zoomControl": true,
+  "preferCanvas": false,
+}
+
+                }
+            );
+            L.control.scale().addTo(map_4e3b41135f60fc1a7224f14dec044ef0);
+
+            
+
+        
+    
+            var tile_layer_f55e8bfa097261f12bc035899f129c9d = L.tileLayer(
+                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 19,
+  "maxNativeZoom": 19,
+  "noWrap": false,
+  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_f55e8bfa097261f12bc035899f129c9d.addTo(map_4e3b41135f60fc1a7224f14dec044ef0);
+        
+    
+            var marker_2e65b04cd5b6c091fd352ba1900c57a9 = L.marker(
+                [55.7537, 37.6145],
+                {
+  "draggable": null,
+  "autoPan": null,
+}
+            ).addTo(map_4e3b41135f60fc1a7224f14dec044ef0);
+        
+    
+        var popup_ddb44461757d17d68942050f5b1907cd = L.popup({
+  "maxWidth": "100%",
+  "autoClose": null,
+  "closeOnClick": null,
+});
+
+        
+            
+                var html_008e799b22213b9b2fd03cc6424b618b = $(`<div id="html_008e799b22213b9b2fd03cc6424b618b" style="width: 100.0%; height: 100.0%;">Проблемная зона с риском затопления при уровне воды > 2 м</div>`)[0];
+                popup_ddb44461757d17d68942050f5b1907cd.setContent(html_008e799b22213b9b2fd03cc6424b618b);
+            
+        
+
+        marker_2e65b04cd5b6c091fd352ba1900c57a9.bindPopup(popup_ddb44461757d17d68942050f5b1907cd)
+        ;
+
+        
+    
+    
+            var marker_2536ab51bac2c524276458a6a96637b4 = L.marker(
+                [55.7527, 37.6225],
+                {
+  "draggable": null,
+  "autoPan": null,
+}
+            ).addTo(map_4e3b41135f60fc1a7224f14dec044ef0);
+        
+    
+        var popup_8c24b141443484f30c1131229a359d1f = L.popup({
+  "maxWidth": "100%",
+  "autoClose": null,
+  "closeOnClick": null,
+});
+
+        
+            
+                var html_41a54ba0ad789997889e44ef8f427c32 = $(`<div id="html_41a54ba0ad789997889e44ef8f427c32" style="width: 100.0%; height: 100.0%;">Участок с частичными подтоплениями после обильных дождей</div>`)[0];
+                popup_8c24b141443484f30c1131229a359d1f.setContent(html_41a54ba0ad789997889e44ef8f427c32);
+            
+        
+
+        marker_2536ab51bac2c524276458a6a96637b4.bindPopup(popup_8c24b141443484f30c1131229a359d1f)
+        ;
+
+        
+    
+    
+            var marker_fce88e1ce8433cb92240786a2b64856b = L.marker(
+                [55.7517, 37.6325],
+                {
+  "draggable": null,
+  "autoPan": null,
+}
+            ).addTo(map_4e3b41135f60fc1a7224f14dec044ef0);
+        
+    
+        var popup_c8802ba2515d39852a4642ed7f664111 = L.popup({
+  "maxWidth": "100%",
+  "autoClose": null,
+  "closeOnClick": null,
+});
+
+        
+            
+                var html_e64a71dcab9c9b01f3cfee957979a880 = $(`<div id="html_e64a71dcab9c9b01f3cfee957979a880" style="width: 100.0%; height: 100.0%;">Высокий уровень риска затопления при весеннем паводке</div>`)[0];
+                popup_c8802ba2515d39852a4642ed7f664111.setContent(html_e64a71dcab9c9b01f3cfee957979a880);
+            
+        
+
+        marker_fce88e1ce8433cb92240786a2b64856b.bindPopup(popup_c8802ba2515d39852a4642ed7f664111)
+        ;
+
+        
+    
+    
+            var heat_map_85abd714c69b34419acde75ce5159d72 = L.heatLayer(
+                [[55.7537, 37.6145], [55.7527, 37.6225], [55.7517, 37.6325]],
+                {
+  "minOpacity": 0.5,
+  "maxZoom": 18,
+  "radius": 25,
+  "blur": 15,
+  "gradient": null,
+}
+            );
+        
+    
+            heat_map_85abd714c69b34419acde75ce5159d72.addTo(map_4e3b41135f60fc1a7224f14dec044ef0);
+        
+    
+            var options = {
+              position: "topleft",
+              draw: {},
+              edit: {},
+            }
+                // FeatureGroup is to store editable layers.
+                var drawnItems_draw_control_a84b02d1f759820903e9cd3e70a0f384 =
+                    new L.featureGroup().addTo(
+                        map_4e3b41135f60fc1a7224f14dec044ef0
+                    );
+
+            options.edit.featureGroup = drawnItems_draw_control_a84b02d1f759820903e9cd3e70a0f384;
+            var draw_control_a84b02d1f759820903e9cd3e70a0f384 = new L.Control.Draw(
+                options
+            ).addTo( map_4e3b41135f60fc1a7224f14dec044ef0 );
+            map_4e3b41135f60fc1a7224f14dec044ef0.on(L.Draw.Event.CREATED, function(e) {
+                var layer = e.layer,
+                    type = e.layerType;
+                var coords = JSON.stringify(layer.toGeoJSON());
+                layer.on('click', function() {
+                    alert(coords);
+                    console.log(coords);
+                });
+                drawnItems_draw_control_a84b02d1f759820903e9cd3e70a0f384.addLayer(layer);
+            });
+            map_4e3b41135f60fc1a7224f14dec044ef0.on('draw:created', function(e) {
+                drawnItems_draw_control_a84b02d1f759820903e9cd3e70a0f384.addLayer(e.layer);
+            });
+
+            
+            document.getElementById('export').onclick = function(e) {
+                var data = drawnItems_draw_control_a84b02d1f759820903e9cd3e70a0f384.toGeoJSON();
+                var convertedData = 'text/json;charset=utf-8,'
+                    + encodeURIComponent(JSON.stringify(data));
+                document.getElementById('export').setAttribute(
+                    'href', 'data:' + convertedData
+                );
+                document.getElementById('export').setAttribute(
+                    'download', "data.geojson"
+                );
+            }
+            
+        
+</script>
+</html>
