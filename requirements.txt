@@ -1,6 +1,11 @@
+# numpy==1.21.6
 folium
 pandas
 pyproj
 matplotlib
 rasterio
 shapely
+tensorflow-cpu==1.2
+protobuf==3.20
+tifffile
+opencv-python

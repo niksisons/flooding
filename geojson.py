@@ -3,15 +3,7 @@ import pandas as pd
 from shapely.geometry import shape
 
 def process_geojson(file_path):
-    """
-    Загружает и обрабатывает GeoJSON файл, возвращая pandas DataFrame с координатами и дополнительными данными.
 
-    Параметры:
-        file_path (str): Путь к GeoJSON файлу.
-
-    Возвращает:
-        pd.DataFrame: Таблица с названием, описанием и координатами зон.
-    """
     # Открываем и загружаем GeoJSON файл
     with open(file_path, encoding="utf-8") as f:
         geojson_data = json.load(f)

@@ -1,5 +1,7 @@
 diagram.py
 
+deepwatermap/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
