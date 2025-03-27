@@ -7,6 +7,24 @@ from .models import FloodEvent, MeasurementPoint, WaterLevelMeasurement
 logger = logging.getLogger(__name__)
 
 @shared_task
+def update_geoserver_layers():
+    """
+    Задача для обновления слоев в GeoServer
+    """
+    logger.info("Запуск обновления слоев GeoServer")
+    try:
+        from .geoserver import setup_geoserver
+        result = setup_geoserver()
+        if result:
+            logger.info("Обновление слоев GeoServer завершено успешно")
+        else:
+            logger.error("Ошибка при обновлении слоев GeoServer")
+        return result
+    except Exception as e:
+        logger.error(f"Ошибка при обновлении слоев GeoServer: {str(e)}")
+        return False
+
+@shared_task
 def update_water_level_data():
     """
     Задача для обновления данных об уровне воды.

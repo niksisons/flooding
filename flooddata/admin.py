@@ -26,4 +26,4 @@ class MeasurementPointAdmin(OSMGeoAdmin):
 class WaterLevelMeasurementAdmin(admin.ModelAdmin):
     list_display = ('point', 'timestamp', 'value', 'is_forecast')
     list_filter = ('is_forecast', 'timestamp', 'point')
-    search_fields = ('point__name', 'point__code') 
+    search_fields = ('point__name', 'point__code')

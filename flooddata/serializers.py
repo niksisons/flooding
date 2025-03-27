@@ -23,17 +23,7 @@ class MeasurementPointSerializer(GeoFeatureModelSerializer):
 
 class WaterLevelMeasurementSerializer(serializers.ModelSerializer):
     point_name = serializers.CharField(source='point.name', read_only=True)
-    point_location = serializers.SerializerMethodField()
     
     class Meta:
         model = WaterLevelMeasurement
-        fields = ('id', 'point', 'point_name', 'point_location', 
-                  'timestamp', 'value', 'is_forecast')
-    
-    def get_point_location(self, obj):
-        if obj.point and obj.point.location:
-            return {
-                'lon': obj.point.location.x,
-                'lat': obj.point.location.y
-            }
-        return None 
+        fields = ('id', 'point', 'point_name', 'timestamp', 'value', 'is_forecast') 
