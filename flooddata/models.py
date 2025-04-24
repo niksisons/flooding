@@ -86,4 +86,14 @@ class WaterLevelMeasurement(models.Model):
         ordering = ['-timestamp']
     
     def __str__(self):
-        return f"{self.point.name}: {self.value}м ({self.timestamp.strftime('%d.%m.%Y %H:%M')})" 
+        return f"{self.point.name}: {self.value}м ({self.timestamp.strftime('%d.%m.%Y %H:%M')})"
+
+class DEMFile(models.Model):
+    file = models.FileField(upload_to='dem/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    processed = models.BooleanField(default=False)
+    corrected_file = models.FileField(upload_to='dem_results/', null=True, blank=True)
+    accumulation_file = models.FileField(upload_to='dem_results/', null=True, blank=True)
+
+    def __str__(self):
+        return f"DEM: {self.file.name} (processed: {self.processed})"

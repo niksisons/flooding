@@ -5,6 +5,7 @@ from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken.views import obtain_auth_token
 from django.shortcuts import render
+from flooddata.views import HydrologicalCorrectionAPIView
 
 # Простое представление для проверки работы сервера
 def home(request):
@@ -24,10 +25,11 @@ try:
     router.register(r'flood-events', FloodEventViewSet, basename='flood-event')
     router.register(r'measurement-points', MeasurementPointViewSet)
     router.register(r'water-levels', WaterLevelMeasurementViewSet, basename='water-level')
-    
+    # Добавляем новый endpoint для гидрологической коррекции DEM
     api_urls = [
         path('', include(router.urls)),
         path('auth/', obtain_auth_token, name='api_token_auth'),
+        path('hydro-correction/', HydrologicalCorrectionAPIView.as_view(), name='hydro_correction'),
     ]
 except ImportError:
     # Если представления еще не созданы, используем пустой список
@@ -44,4 +46,4 @@ urlpatterns = [
 # Добавляем URL-шаблоны для статических и медиа-файлов
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) 
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

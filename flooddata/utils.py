@@ -192,4 +192,48 @@ def export_flood_data(start_date, end_date, format='geojson'):
         
     except Exception as e:
         logger.error(f"Ошибка при экспорте данных: {str(e)}")
-        raise 
+        raise
+
+def hydrological_dem_correction(dem_path, output_dem_path=None, output_acc_path=None):
+    """
+    Гидрологическая коррекция ЦМП (DEM) с помощью pysheds.
+    Args:
+        dem_path: путь к исходному DEM (GeoTIFF)
+        output_dem_path: путь для сохранения скорректированного DEM (опционально)
+        output_acc_path: путь для сохранения карты аккумуляции (опционально)
+    Returns:
+        dict с numpy-массивами скорректированного DEM и аккумуляции
+    """
+    try:
+        from pysheds.grid import Grid
+        import numpy as np
+        import os
+        
+        grid = Grid.from_raster(dem_path)
+        dem = grid.read_raster(dem_path)
+
+        # 1. Fill pits
+        pit_filled_dem = grid.fill_pits(dem)
+        # 2. Fill depressions
+        flooded_dem = grid.fill_depressions(pit_filled_dem)
+        # 3. Resolve flats
+        inflated_dem = grid.resolve_flats(flooded_dem)
+        # 4. Flow direction
+        fdir = grid.flowdir(inflated_dem)
+        # 5. Accumulation
+        acc = grid.accumulation(fdir)
+
+        # Сохраняем скорректированный DEM
+        if output_dem_path:
+            grid.save_raster(output_dem_path, inflated_dem, dtype='float32')
+        # Сохраняем аккумуляцию
+        if output_acc_path:
+            grid.save_raster(output_acc_path, acc, dtype='float32')
+
+        return {
+            'corrected_dem': inflated_dem,
+            'accumulation': acc
+        }
+    except Exception as e:
+        logger.error(f"Ошибка гидрологической коррекции DEM: {str(e)}")
+        raise
