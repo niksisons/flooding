@@ -6,6 +6,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken.views import obtain_auth_token
 from django.shortcuts import render
 from flooddata.views import HydrologicalCorrectionAPIView
+from flooddata.views import CompareFloodMasksAPIView
 
 # Простое представление для проверки работы сервера
 def home(request):
@@ -30,6 +31,7 @@ try:
         path('', include(router.urls)),
         path('auth/', obtain_auth_token, name='api_token_auth'),
         path('hydro-correction/', HydrologicalCorrectionAPIView.as_view(), name='hydro_correction'),
+        path('compare-flood-masks/', CompareFloodMasksAPIView.as_view(), name='compare_flood_masks'),
     ]
 except ImportError:
     # Если представления еще не созданы, используем пустой список

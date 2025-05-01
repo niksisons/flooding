@@ -237,3 +237,59 @@ def hydrological_dem_correction(dem_path, output_dem_path=None, output_acc_path=
     except Exception as e:
         logger.error(f"Ошибка гидрологической коррекции DEM: {str(e)}")
         raise
+
+def compare_dem_with_satellite(dem_path, satellite_mask_path, threshold=2.0, diff_output_path=None):
+    """
+    Сравнение DEM (скорректированного) с маской затопления по ДЗЗ.
+    dem_path: путь к скорректированному DEM (GeoTIFF)
+    satellite_mask_path: путь к бинарной маске затопления по ДЗЗ (GeoTIFF, 1 - затоплено, 0 - нет)
+    threshold: высота, ниже которой считается потенциальное затопление
+    diff_output_path: путь для сохранения карты различий (опционально)
+    Возвращает: dict с IoU, false positives, false negatives, путь к карте различий
+    """
+    import rasterio
+    import numpy as np
+    import os
+    
+    with rasterio.open(dem_path) as dem_src, rasterio.open(satellite_mask_path) as mask_src:
+        dem = dem_src.read(1)
+        mask = mask_src.read(1)
+        # Приведение к одной размерности, если нужно
+        if dem.shape != mask.shape:
+            raise ValueError("Размеры DEM и маски не совпадают")
+    
+    # Маска потенциальных затоплений по DEM
+    dem_flood = (dem < threshold).astype(np.uint8)
+    # False positives: по ДЗЗ есть вода, по DEM нет
+    false_positives = (mask == 1) & (dem_flood == 0)
+    # False negatives: по DEM должно быть затопление, по ДЗЗ нет
+    false_negatives = (mask == 0) & (dem_flood == 1)
+    # True positives: совпадения
+    true_positives = (mask == 1) & (dem_flood == 1)
+    # IoU
+    intersection = np.logical_and(mask == 1, dem_flood == 1).sum()
+    union = np.logical_or(mask == 1, dem_flood == 1).sum()
+    iou = intersection / union if union > 0 else 0
+    # Карта различий: 0 - совпадение, 1 - FP, 2 - FN
+    diff_map = np.zeros_like(mask, dtype=np.uint8)
+    diff_map[false_positives] = 1
+    diff_map[false_negatives] = 2
+    # Сохраняем карту различий
+    if diff_output_path:
+        with rasterio.open(
+            diff_output_path, 'w',
+            driver='GTiff',
+            height=diff_map.shape[0],
+            width=diff_map.shape[1],
+            count=1,
+            dtype=diff_map.dtype,
+            crs=dem_src.crs,
+            transform=dem_src.transform
+        ) as dst:
+            dst.write(diff_map, 1)
+    return {
+        'iou': float(iou),
+        'false_positives': int(false_positives.sum()),
+        'false_negatives': int(false_negatives.sum()),
+        'diff_map': diff_output_path
+    }

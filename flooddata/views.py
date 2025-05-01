@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.conf import settings
-from .utils import hydrological_dem_correction
+from .utils import hydrological_dem_correction, compare_dem_with_satellite
 import os
 
 from .models import FloodZone, FloodEvent, MeasurementPoint, WaterLevelMeasurement
@@ -78,3 +78,19 @@ class HydrologicalCorrectionAPIView(APIView):
             })
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class CompareFloodMasksAPIView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def post(self, request):
+        dem_path = request.data.get('dem_path')
+        mask_path = request.data.get('mask_path')
+        threshold = float(request.data.get('threshold', 2.0))
+        if not (dem_path and mask_path and os.path.exists(dem_path) and os.path.exists(mask_path)):
+            return Response({"error": "DEM или маска не найдены"}, status=status.HTTP_400_BAD_REQUEST)
+        output_dir = os.path.join(settings.MEDIA_ROOT, 'dem_results')
+        os.makedirs(output_dir, exist_ok=True)
+        diff_path = os.path.join(output_dir, 'diff_map.tif')
+        result = compare_dem_with_satellite(dem_path, mask_path, threshold, diff_output_path=diff_path)
+        result['diff_map'] = diff_path.replace(settings.MEDIA_ROOT, settings.MEDIA_URL)
+        return Response(result)
