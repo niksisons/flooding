@@ -7,4 +7,4 @@ class FlooddataConfig(AppConfig):
 
     def ready(self):
         """Импорт сигналов при запуске приложения"""
-        import flooddata.signals 
+        import flooddata.signals

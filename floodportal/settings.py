@@ -160,8 +160,12 @@ CELERY_TIMEZONE = 'Europe/Moscow'
 # CORS настройки
 CORS_ALLOW_ALL_ORIGINS = True  # В продакшене лучше указать конкретные домены 
 
+# Настройки статических файлов
 STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+STATIC_ROOT = os.path.join(BASE_DIR, 'static_collected')  # Папка для collectstatic
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'static'),  # Папка для собственных статических файлов
+]
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 

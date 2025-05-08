@@ -26,4 +26,4 @@ app.conf.beat_schedule = {
         'task': 'flooddata.tasks.detect_flood_events',
         'schedule': 21600.0,  # каждые 6 часов
     },
-} 
+}

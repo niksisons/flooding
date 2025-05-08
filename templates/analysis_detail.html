@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Анализ затопления: {{ analysis.name }}{% endblock %}
+{% block content %}
+<div class="analysis-detail-container">
+    <h1>{{ analysis.name }}</h1>
+    
+    {% if messages %}
+    <div class="messages">
+        {% for message in messages %}
+            <div class="message {% if message.tags %}{{ message.tags }}{% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    <div class="analysis-actions">
+        <a href="{% url 'analysis_list' %}" class="btn btn-secondary">← К списку анализов</a>
+        {% if analysis.status == 'pending' or analysis.status == 'error' %}
+            <a href="{% url 'process_analysis' analysis.id %}" class="btn btn-success">Запустить обработку</a>
+        {% endif %}
+        <a href="{% url 'map' %}" class="btn btn-info">Просмотр на карте</a>
+    </div>
+    
+    <div class="analysis-info-card">
+        <div class="card-header">
+            <h2>Информация об анализе</h2>
+            <span class="badge status-{{ analysis.status }}">
+                {{ analysis.get_status_display }}
+            </span>
+        </div>
+        <div class="card-body">
+            <div class="info-row">
+                <div class="info-label">Создан:</div>
+                <div class="info-value">{{ analysis.created_at|date:"d.m.Y H:i" }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Автор:</div>
+                <div class="info-value">{{ analysis.created_by.get_full_name|default:analysis.created_by.username }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">DEM файл:</div>
+                <div class="info-value">{{ analysis.dem_file.name }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Космический снимок:</div>
+                <div class="info-value">{{ analysis.satellite_image.name }} ({{ analysis.satellite_image.image_date|date:"d.m.Y" }})</div>
+            </div>
+            {% if analysis.flooded_area_sqkm %}
+            <div class="info-row">
+                <div class="info-label">Площадь затопления:</div>
+                <div class="info-value highlight">{{ analysis.flooded_area_sqkm|floatformat:2 }} км²</div>
+            </div>
+            {% endif %}
+            {% if analysis.error_message %}
+            <div class="info-row error-message">
+                <div class="info-label">Ошибка:</div>
+                <div class="info-value">{{ analysis.error_message }}</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    {% if analysis.status == 'completed' %}
+    <div class="result-section">
+        <h2>Результаты анализа</h2>
+        
+        <div class="result-cards">
+            {% if analysis.flood_mask %}
+            <div class="result-card">
+                <h3>Маска затопления</h3>
+                <div class="result-image">
+                    <img src="{{ analysis.flood_mask.url }}" alt="Маска затопления" class="flood-mask-image">
+                </div>
+                <div class="card-actions">
+                    <a href="{{ analysis.flood_mask.url }}" class="btn btn-sm btn-primary" download>Скачать</a>
+                </div>
+            </div>
+            {% endif %}
+            
+            <div class="result-card">
+                <h3>Информация о затоплении</h3>
+                <div class="flood-stats">
+                    <div class="stat-item">
+                        <div class="stat-label">Площадь затопления:</div>
+                        <div class="stat-value">{{ analysis.flooded_area_sqkm|floatformat:2 }} км²</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Сравнение с базовым слоем:</div>
+                        <div class="stat-value">{{ analysis.compared_with_base|yesno:"Выполнено,Не выполнено" }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="map-preview">
+            <h3>Предпросмотр на карте</h3>
+            <div id="map" class="analysis-map"></div>
+        </div>
+    </div>
+    {% elif analysis.status == 'processing' %}
+    <div class="processing-section">
+        <div class="processing-message">
+            <div class="spinner"></div>
+            <p>Выполняется обработка данных... Пожалуйста, подождите или вернитесь позже.</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<style>
+    .analysis-detail-container {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    
+    .analysis-actions {
+        display: flex;
+        gap: 10px;
+        margin: 20px 0;
+        flex-wrap: wrap;
+    }
+    
+    .analysis-info-card {
+        background: #f9f9f9;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        margin-bottom: 30px;
+    }
+    
+    .card-header {
+        background: #f1f3f5;
+        padding: 15px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .card-header h2 {
+        margin: 0;
+        font-size: 1.25rem;
+    }
+    
+    .card-body {
+        padding: 20px;
+    }
+    
+    .info-row {
+        display: flex;
+        margin-bottom: 12px;
+        border-bottom: 1px solid #e9ecef;
+        padding-bottom: 12px;
+    }
+    
+    .info-row:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+    
+    .info-label {
+        font-weight: bold;
+        width: 30%;
+        min-width: 150px;
+    }
+    
+    .info-value {
+        flex: 1;
+    }
+    
+    .info-value.highlight {
+        font-weight: bold;
+        color: #28a745;
+    }
+    
+    .error-message .info-value {
+        color: #dc3545;
+    }
+    
+    .badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        color: white;
+    }
+    
+    .status-pending {
+        background-color: #6c757d;
+    }
+    
+    .status-processing {
+        background-color: #ffc107;
+        color: #212529;
+    }
+    
+    .status-completed {
+        background-color: #28a745;
+    }
+    
+    .status-error {
+        background-color: #dc3545;
+    }
+    
+    .result-section {
+        margin-top: 30px;
+    }
+    
+    .result-cards {
+        display: flex;
+        gap: 20px;
+        margin: 20px 0;
+        flex-wrap: wrap;
+    }
+    
+    .result-card {
+        flex: 1;
+        min-width: 300px;
+        background: #f9f9f9;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    
+    .result-card h3 {
+        margin: 0;
+        padding: 15px;
+        background: #f1f3f5;
+        font-size: 1.1rem;
+    }
+    
+    .result-image {
+        padding: 15px;
+        text-align: center;
+    }
+    
+    .flood-mask-image {
+        max-width: 100%;
+        max-height: 300px;
+        border: 1px solid #ddd;
+    }
+    
+    .card-actions {
+        padding: 10px 15px;
+        text-align: right;
+        background: #f8f9fa;
+        border-top: 1px solid #e9ecef;
+    }
+    
+    .flood-stats {
+        padding: 15px;
+    }
+    
+    .stat-item {
+        display: flex;
+        margin-bottom: 10px;
+    }
+    
+    .stat-label {
+        font-weight: bold;
+        width: 50%;
+    }
+    
+    .map-preview {
+        margin-top: 30px;
+    }
+    
+    .analysis-map {
+        height: 400px;
+        width: 100%;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+    }
+    
+    .processing-section {
+        background: #f8f9fa;
+        padding: 30px;
+        text-align: center;
+        border-radius: 8px;
+        margin-top: 20px;
+    }
+    
+    .processing-message {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .spinner {
+        border: 4px solid rgba(0, 0, 0, 0.1);
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border-left-color: #3498db;
+        animation: spin 1s linear infinite;
+        margin-bottom: 15px;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .btn {
+        display: inline-block;
+        font-weight: 400;
+        text-align: center;
+        white-space: nowrap;
+        vertical-align: middle;
+        user-select: none;
+        border: 1px solid transparent;
+        padding: 0.375rem 0.75rem;
+        font-size: 1rem;
+        line-height: 1.5;
+        border-radius: 0.25rem;
+        cursor: pointer;
+        text-decoration: none;
+    }
+    
+    .btn-sm {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        border-radius: 0.2rem;
+    }
+    
+    .btn-primary {
+        color: #fff;
+        background-color: #3498db;
+        border-color: #3498db;
+    }
+    
+    .btn-secondary {
+        color: #fff;
+        background-color: #6c757d;
+        border-color: #6c757d;
+    }
+    
+    .btn-info {
+        color: #fff;
+        background-color: #17a2b8;
+        border-color: #17a2b8;
+    }
+    
+    .btn-success {
+        color: #fff;
+        background-color: #28a745;
+        border-color: #28a745;
+    }
+    
+    .messages {
+        margin-bottom: 20px;
+    }
+    
+    .message {
+        padding: 10px 15px;
+        margin-bottom: 10px;
+        border-radius: 4px;
+    }
+    
+    .message.success {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .message.error {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    
+    @media (max-width: 768px) {
+        .analysis-detail-container {
+            padding: 10px;
+        }
+        
+        .info-row {
+            flex-direction: column;
+        }
+        
+        .info-label {
+            width: 100%;
+            margin-bottom: 5px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+{% if analysis.status == 'completed' and analysis.flood_vector %}
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Инициализируем карту
+        const map = L.map('map').setView([55.7522, 37.6156], 10);
+        
+        // Добавляем базовый слой OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        
+        // Загружаем данные векторного слоя затопления
+        fetch('/geojson/flood-analyses/')
+            .then(response => response.json())
+            .then(data => {
+                // Добавляем слой затопления
+                const floodLayer = L.geoJSON(data, {
+                    style: {
+                        color: "#3498db",
+                        weight: 2,
+                        opacity: 0.7,
+                        fillColor: "#3498db",
+                        fillOpacity: 0.4
+                    },
+                    onEachFeature: function(feature, layer) {
+                        if (feature.properties) {
+                            layer.bindPopup(`
+                                <strong>${feature.properties.name}</strong><br>
+                                Дата: ${feature.properties.created_at}<br>
+                                Площадь: ${feature.properties.flooded_area_sqkm} км²
+                            `);
+                        }
+                    }
+                }).addTo(map);
+                
+                // Центрируем карту на слое затопления
+                map.fitBounds(floodLayer.getBounds());
+            })
+            .catch(error => {
+                console.error('Ошибка загрузки данных затопления:', error);
+            });
+    });
+</script>
+{% endif %}
+{% endblock %}

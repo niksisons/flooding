@@ -162,4 +162,4 @@ def setup_geoserver():
             layer["abstract"]
         )
     
-    return True 
+    return True

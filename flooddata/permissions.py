@@ -13,4 +13,4 @@ class IsAdminOrReadOnly(permissions.BasePermission):
             
         # Запись только для авторизованных администраторов
         return request.user and request.user.is_authenticated and (
-            request.user.is_staff or request.user.is_superuser) 
+            request.user.is_staff or request.user.is_superuser)

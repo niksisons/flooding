@@ -1,0 +1,74 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Геопортал{% endblock %}</title>
+    <!-- Шрифты и иконки -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    
+    <!-- Leaflet - библиотека для карт -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    
+    <!-- Основные стили сайта -->
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    
+    <!-- Дополнительные стили для конкретных страниц -->
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav>
+        <div class="nav-left">
+            <a href="{% url 'home' %}"><i class="material-icons">home</i> Главная</a>
+            <a href="{% url 'map' %}"><i class="material-icons">map</i> Карта</a>
+            {% if user.is_authenticated %}
+                <a href="{% url 'upload' %}"><i class="material-icons">cloud_upload</i> Загрузка данных</a>
+                <a href="{% url 'analyze' %}"><i class="material-icons">analytics</i> Анализ затопления</a>
+                <a href="{% url 'analysis_list' %}"><i class="material-icons">list</i> Мои анализы</a>
+            {% endif %}
+        </div>
+        <div class="nav-right">
+            {% if user.is_authenticated %}
+                <span class="user-welcome"><i class="material-icons">person</i> {{ user.username }}</span>
+                <a href="{% url 'logout' %}"><i class="material-icons">exit_to_app</i> Выйти</a>
+            {% else %}
+                <a href="{% url 'login' %}"><i class="material-icons">login</i> Войти</a>
+                <a href="{% url 'register' %}"><i class="material-icons">person_add</i> Регистрация</a>
+            {% endif %}
+            {% if user.is_staff %}
+                <a href="/admin/" class="admin-link"><i class="material-icons">settings</i> Админка</a>
+            {% endif %}
+        </div>
+    </nav>
+    
+    <div class="container">
+        {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="message {% if message.tags %}{{ message.tags }}{% endif %}">
+                    <i class="material-icons">
+                        {% if 'success' in message.tags %}check_circle
+                        {% elif 'error' in message.tags %}error
+                        {% elif 'warning' in message.tags %}warning
+                        {% else %}info{% endif %}
+                    </i>
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        {% block content %}{% endblock %}
+    </div>
+    
+    <footer>
+        <div class="footer-content">
+            <p>&copy; {% now "Y" %} Геопортал для мониторинга затоплений</p>
+        </div>
+    </footer>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

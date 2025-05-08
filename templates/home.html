@@ -1,58 +1,210 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Геопортал</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background-color: white;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #2c3e50;
-        }
-        .links {
-            margin-top: 20px;
-        }
-        .links a {
-            display: inline-block;
-            margin-right: 10px;
-            padding: 8px 15px;
-            background-color: #3498db;
-            color: white;
-            text-decoration: none;
-            border-radius: 3px;
-        }
-        .links a:hover {
-            background-color: #2980b9;
-        }
-        .links .map-btn {
-            background-color: #27ae60;
-        }
-        .links .map-btn:hover {
-            background-color: #219955;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Геопортал для мониторинга затоплений</h1>
-        <p>Проект успешно запущен и работает!</p>
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Геопортал{% endblock %}
+{% block content %}
+<div class="home-content">
+    <h1>Геопортал для мониторинга затоплений</h1>
+    <p class="lead">Интерактивная система для отслеживания и анализа затопленных территорий</p>
+    
+    <div class="features">
+        <div class="feature-box">
+            <div class="feature-icon">
+                <i class="material-icons">map</i>
+            </div>
+            <h3>Интерактивные карты</h3>
+            <p>Просматривайте зоны затопления, исторические события и точки измерения на интерактивной карте</p>
+            <a href="{% url 'map' %}" class="feature-btn"><i class="material-icons">open_in_new</i> Открыть карту</a>
+        </div>
         
-        <div class="links">
-            <a href="/map/" class="map-btn">Интерактивная карта</a>
-            <a href="/admin/">Панель администратора</a>
-            <a href="/api/">API</a>
+        <div class="feature-box">
+            <div class="feature-icon">
+                <i class="material-icons">analytics</i>
+            </div>
+            <h3>Анализ данных</h3>
+            <p>Загружайте DEM-файлы и маски затопления для гидрологического анализа</p>
+            {% if user.is_authenticated %}
+                <a href="{% url 'upload' %}" class="feature-btn"><i class="material-icons">cloud_upload</i> Загрузить данные</a>
+            {% else %}
+                <a href="{% url 'login' %}" class="feature-btn"><i class="material-icons">login</i> Войти для загрузки</a>
+            {% endif %}
+        </div>
+        
+        <div class="feature-box">
+            <div class="feature-icon">
+                <i class="material-icons">code</i>
+            </div>
+            <h3>API</h3>
+            <p>Используйте наш API для интеграции с другими системами и приложениями</p>
+            <a href="/api/" class="feature-btn"><i class="material-icons">description</i> Документация API</a>
         </div>
     </div>
-</body>
-</html> 
+    
+    {% if not user.is_authenticated %}
+    <div class="cta-block">
+        <h2>Начните работу с геопорталом</h2>
+        <p>Зарегистрируйтесь, чтобы получить доступ ко всем функциям портала</p>
+        <div class="cta-buttons">
+            <a href="{% url 'register' %}" class="cta-btn register"><i class="material-icons">person_add</i> Зарегистрироваться</a>
+            <a href="{% url 'login' %}" class="cta-btn login"><i class="material-icons">login</i> Войти</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block head %}
+<style>
+    .home-content {
+        text-align: center;
+        padding: 20px 0;
+    }
+    
+    .lead {
+        font-size: 1.2rem;
+        color: #666;
+        margin-bottom: 30px;
+    }
+    
+    .features {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        margin: 30px 0;
+    }
+    
+    .feature-box {
+        flex: 1;
+        min-width: 250px;
+        margin: 15px;
+        padding: 25px 20px;
+        background: #f9f9f9;
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow);
+        transition: var(--transition);
+        border: 1px solid var(--medium-gray);
+    }
+    
+    .feature-box:hover {
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    
+    .feature-icon {
+        margin-bottom: 15px;
+    }
+    
+    .feature-icon i {
+        font-size: 48px;
+        color: var(--primary-color);
+    }
+    
+    .feature-box h3 {
+        color: var(--primary-dark);
+        margin-top: 0;
+        margin-bottom: 12px;
+        font-size: 20px;
+    }
+    
+    .feature-box p {
+        color: #666;
+        margin-bottom: 20px;
+    }
+    
+    .feature-btn {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 15px;
+        background-color: var(--primary-color);
+        color: white;
+        text-decoration: none;
+        border-radius: var(--border-radius);
+        transition: var(--transition);
+        font-weight: 500;
+    }
+    
+    .feature-btn i {
+        margin-right: 6px;
+    }
+    
+    .feature-btn:hover {
+        background-color: var(--primary-dark);
+    }
+    
+    .cta-block {
+        margin: 40px 0;
+        padding: 30px;
+        background: var(--light-gray);
+        border-radius: var(--border-radius);
+        border: 1px solid var(--medium-gray);
+    }
+    
+    .cta-block h2 {
+        color: var(--primary-dark);
+        margin-top: 0;
+        margin-bottom: 15px;
+    }
+    
+    .cta-block p {
+        color: #666;
+        margin-bottom: 25px;
+    }
+    
+    .cta-buttons {
+        margin-top: 20px;
+    }
+    
+    .cta-btn {
+        display: inline-flex;
+        align-items: center;
+        padding: 10px 20px;
+        margin: 0 10px;
+        border-radius: var(--border-radius);
+        text-decoration: none;
+        font-weight: 500;
+        transition: var(--transition);
+    }
+    
+    .cta-btn i {
+        margin-right: 8px;
+    }
+    
+    .cta-btn.register {
+        background-color: var(--success-color);
+        color: white;
+    }
+    
+    .cta-btn.register:hover {
+        background-color: #2E7D32;
+    }
+    
+    .cta-btn.login {
+        background-color: var(--primary-color);
+        color: white;
+    }
+    
+    .cta-btn.login:hover {
+        background-color: var(--primary-dark);
+    }
+    
+    @media (max-width: 768px) {
+        .features {
+            flex-direction: column;
+        }
+        
+        .feature-box {
+            margin: 10px 0;
+        }
+        
+        .cta-buttons {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .cta-btn {
+            margin: 5px 0;
+            width: 100%;
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}

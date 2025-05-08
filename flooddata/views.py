@@ -7,8 +7,20 @@ from rest_framework import status, permissions
 from django.conf import settings
 from .utils import hydrological_dem_correction, compare_dem_with_satellite
 import os
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth import authenticate, login, logout
+from django.contrib import messages
+from django.http import JsonResponse, HttpResponseRedirect
+from .models import (FloodZone, FloodEvent, MeasurementPoint, WaterLevelMeasurement,
+                    DEMFile, SatelliteImage, FloodAnalysis)
+from django.core.serializers import serialize
+from django.utils import timezone
+import json
+from django.urls import reverse
+from .forms import (UserRegistrationForm, DEMFileUploadForm, 
+                  SatelliteImageUploadForm, FloodAnalysisForm)
 
-from .models import FloodZone, FloodEvent, MeasurementPoint, WaterLevelMeasurement
 from .serializers import (FloodZoneSerializer, FloodEventSerializer,
                          MeasurementPointSerializer, WaterLevelMeasurementSerializer)
 
@@ -94,3 +106,212 @@ class CompareFloodMasksAPIView(APIView):
         result = compare_dem_with_satellite(dem_path, mask_path, threshold, diff_output_path=diff_path)
         result['diff_map'] = diff_path.replace(settings.MEDIA_ROOT, settings.MEDIA_URL)
         return Response(result)
+
+def home(request):
+    return render(request, "home.html")
+
+def register_view(request):
+    if request.method == "POST":
+        form = UserRegistrationForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            username = form.cleaned_data.get('username')
+            messages.success(request, f"Аккаунт создан для {username}. Теперь вы можете войти.")
+            return redirect('login')
+    else:
+        form = UserRegistrationForm()
+    return render(request, "register.html", {"form": form})
+
+def login_view(request):
+    if request.method == "POST":
+        username = request.POST.get("username")
+        password = request.POST.get("password")
+        user = authenticate(request, username=username, password=password)
+        if user:
+            login(request, user)
+            next_url = request.GET.get('next', 'home')
+            return redirect(next_url)
+        else:
+            messages.error(request, "Неверный логин или пароль")
+    return render(request, "login.html")
+
+def logout_view(request):
+    logout(request)
+    return redirect("login")
+
+@login_required
+def upload_view(request):
+    """Представление с формами для загрузки DEM и космических снимков"""
+    dem_form = DEMFileUploadForm()
+    satellite_form = SatelliteImageUploadForm()
+    
+    # Получаем последние загрузки пользователя
+    user_dem_files = DEMFile.objects.filter(uploaded_by=request.user).order_by('-upload_date')[:5]
+    user_satellite_images = SatelliteImage.objects.filter(uploaded_by=request.user).order_by('-upload_date')[:5]
+    
+    context = {
+        'dem_form': dem_form,
+        'satellite_form': satellite_form,
+        'user_dem_files': user_dem_files,
+        'user_satellite_images': user_satellite_images,
+    }
+    
+    return render(request, "upload.html", context)
+
+@login_required
+def upload_dem_file(request):
+    """Обработчик загрузки DEM файла"""
+    if request.method == "POST":
+        form = DEMFileUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            # Сохраняем файл, но не фиксируем в базе
+            dem_file = form.save(commit=False)
+            dem_file.uploaded_by = request.user
+            dem_file.save()
+            
+            messages.success(request, f"DEM файл '{dem_file.name}' успешно загружен")
+            return redirect('upload')
+        else:
+            messages.error(request, "Ошибка при загрузке DEM файла")
+    
+    return redirect('upload')
+
+@login_required
+def upload_satellite_image(request):
+    """Обработчик загрузки космического снимка"""
+    if request.method == "POST":
+        form = SatelliteImageUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            # Сохраняем файл, но не фиксируем в базе
+            satellite_image = form.save(commit=False)
+            satellite_image.uploaded_by = request.user
+            satellite_image.save()
+            
+            messages.success(request, f"Космический снимок '{satellite_image.name}' успешно загружен")
+            return redirect('upload')
+        else:
+            messages.error(request, "Ошибка при загрузке космического снимка")
+    
+    return redirect('upload')
+
+@login_required
+def analyze_view(request):
+    """Представление для запуска анализа затопления"""
+    if request.method == "POST":
+        form = FloodAnalysisForm(request.POST, user=request.user)
+        if form.is_valid():
+            analysis = form.save(commit=False)
+            analysis.created_by = request.user
+            analysis.status = 'pending'
+            analysis.save()
+            
+            # Здесь можно запустить задачу обработки в фоне (Celery)
+            # Для демонстрации просто покажем сообщение
+            messages.success(request, f"Анализ затопления '{analysis.name}' поставлен в очередь")
+            return redirect('analysis_list')
+    else:
+        form = FloodAnalysisForm(user=request.user)
+    
+    context = {
+        'form': form,
+    }
+    
+    return render(request, "analyze.html", context)
+
+@login_required
+def analysis_list(request):
+    """Список анализов затопления пользователя"""
+    if request.user.is_staff:
+        # Для админа показываем все анализы
+        analyses = FloodAnalysis.objects.all().order_by('-created_at')
+    else:
+        # Для обычного пользователя - только его анализы
+        analyses = FloodAnalysis.objects.filter(created_by=request.user).order_by('-created_at')
+    
+    context = {
+        'analyses': analyses,
+    }
+    
+    return render(request, "analysis_list.html", context)
+
+@login_required
+def analysis_detail(request, analysis_id):
+    """Детальная информация о конкретном анализе затопления"""
+    analysis = get_object_or_404(FloodAnalysis, pk=analysis_id)
+    
+    # Проверка прав доступа - только владелец или админ
+    if analysis.created_by != request.user and not request.user.is_staff:
+        messages.error(request, "У вас нет доступа к этому анализу")
+        return redirect('analysis_list')
+    
+    context = {
+        'analysis': analysis,
+    }
+    
+    return render(request, "analysis_detail.html", context)
+
+@login_required
+def process_analysis(request, analysis_id):
+    """Запуск обработки анализа (для демонстрации)"""
+    analysis = get_object_or_404(FloodAnalysis, pk=analysis_id)
+    
+    # Проверка прав доступа - только владелец или админ
+    if analysis.created_by != request.user and not request.user.is_staff:
+        messages.error(request, "У вас нет прав для запуска этого анализа")
+        return redirect('analysis_list')
+    
+    # Проверка статуса анализа
+    if analysis.status not in ['pending', 'error']:
+        messages.error(request, "Этот анализ уже обрабатывается или завершен")
+        return redirect('analysis_detail', analysis_id=analysis_id)
+    
+    # Имитация запуска обработки
+    analysis.status = 'processing'
+    analysis.save()
+    
+    # Здесь должен быть запуск реальной обработки в фоне (например, через Celery)
+    # Для демонстрации просто покажем сообщение
+    messages.success(request, f"Анализ '{analysis.name}' запущен в обработку")
+    
+    return redirect('analysis_detail', analysis_id=analysis_id)
+
+# API для GeoJSON (для Leaflet)
+def flood_zones_geojson(request):
+    zones = FloodZone.objects.all()
+    data = serialize('geojson', zones, geometry_field='geometry',
+                   fields=('name', 'description', 'risk_level'))
+    return JsonResponse(json.loads(data), safe=False)
+
+def flood_events_geojson(request):
+    events = FloodEvent.objects.all()
+    data = serialize('geojson', events, geometry_field='geometry',
+                   fields=('title', 'description', 'event_start', 'event_end', 'water_level', 'is_forecast'))
+    return JsonResponse(json.loads(data), safe=False)
+
+def measurement_points_geojson(request):
+    points = MeasurementPoint.objects.all()
+    data = serialize('geojson', points, geometry_field='location',
+                   fields=('name', 'code', 'description'))
+    return JsonResponse(json.loads(data), safe=False)
+
+@login_required
+def flood_analysis_geojson(request):
+    """Возвращает GeoJSON с результатами анализа затопления для карты"""
+    if request.user.is_staff:
+        # Для админа показываем все завершенные анализы
+        analyses = FloodAnalysis.objects.filter(
+            status='completed', 
+            flood_vector__isnull=False
+        )
+    else:
+        # Для обычного пользователя - только его завершенные анализы
+        analyses = FloodAnalysis.objects.filter(
+            created_by=request.user,
+            status='completed',
+            flood_vector__isnull=False
+        )
+    
+    data = serialize('geojson', analyses, geometry_field='flood_vector',
+                   fields=('name', 'created_at', 'flooded_area_sqkm'))
+    
+    return JsonResponse(json.loads(data), safe=False)

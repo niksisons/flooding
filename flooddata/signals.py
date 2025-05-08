@@ -13,4 +13,4 @@ def update_geoserver_on_save(sender, instance, created, **kwargs):
 @receiver(post_delete, sender=FloodZone)
 def update_geoserver_on_delete(sender, instance, **kwargs):
     """Обновление слоев GeoServer при удалении моделей"""
-    update_geoserver_layers.delay() 
+    update_geoserver_layers.delay()

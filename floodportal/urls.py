@@ -7,6 +7,7 @@ from rest_framework.authtoken.views import obtain_auth_token
 from django.shortcuts import render
 from flooddata.views import HydrologicalCorrectionAPIView
 from flooddata.views import CompareFloodMasksAPIView
+from flooddata import views
 
 # Простое представление для проверки работы сервера
 def home(request):
@@ -38,11 +39,29 @@ except ImportError:
     api_urls = []
 
 urlpatterns = [
-    path('', home, name='home'),  # Домашняя страница
+    path('', views.home, name='home'),  # Домашняя страница
     path('map/', map_view, name='map'),  # Страница с картой
     path('admin/', admin.site.urls),
     path('api/', include(api_urls)),
     path('api-auth/', include('rest_framework.urls')),
+    path('login/', views.login_view, name='login'),
+    path('logout/', views.logout_view, name='logout'),
+    path('register/', views.register_view, name='register'),  # Добавляем маршрут для регистрации
+    path('upload/', views.upload_view, name='upload'),
+    
+    # Новые маршруты для работы с файлами и анализом
+    path('upload/dem/', views.upload_dem_file, name='upload_dem'),
+    path('upload/satellite/', views.upload_satellite_image, name='upload_satellite'),
+    path('analyze/', views.analyze_view, name='analyze'),
+    path('analyses/', views.analysis_list, name='analysis_list'),
+    path('analyses/<int:analysis_id>/', views.analysis_detail, name='analysis_detail'),
+    path('analyses/<int:analysis_id>/process/', views.process_analysis, name='process_analysis'),
+    
+    # GeoJSON API для карты
+    path('geojson/flood-zones/', views.flood_zones_geojson, name='flood_zones_geojson'),
+    path('geojson/flood-events/', views.flood_events_geojson, name='flood_events_geojson'),
+    path('geojson/measurement-points/', views.measurement_points_geojson, name='measurement_points_geojson'),
+    path('geojson/flood-analyses/', views.flood_analysis_geojson, name='flood_analysis_geojson'),
 ]
 
 # Добавляем URL-шаблоны для статических и медиа-файлов

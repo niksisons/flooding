@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Загрузка данных{% endblock %}
+{% block content %}
+<div class="upload-container">
+    <h1>Загрузка данных для анализа</h1>
+    
+    {% if messages %}
+    <div class="messages">
+        {% for message in messages %}
+            <div class="message {% if message.tags %}{{ message.tags }}{% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    <div class="upload-sections">
+        <!-- DEM файлы -->
+        <div class="upload-section">
+            <h2>DEM файлы (цифровая модель рельефа)</h2>
+            <form method="post" action="{% url 'upload_dem' %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="form-group">
+                    {{ dem_form.name.label_tag }}
+                    {{ dem_form.name }}
+                    <div class="error">{{ dem_form.name.errors }}</div>
+                </div>
+                <div class="form-group">
+                    {{ dem_form.file.label_tag }}
+                    {{ dem_form.file }}
+                    <small class="form-text text-muted">Поддерживаются файлы GeoTIFF (.tif, .tiff)</small>
+                    <div class="error">{{ dem_form.file.errors }}</div>
+                </div>
+                <div class="form-group">
+                    {{ dem_form.description.label_tag }}
+                    {{ dem_form.description }}
+                    <div class="error">{{ dem_form.description.errors }}</div>
+                </div>
+                {% if request.user.is_staff %}
+                <div class="form-check">
+                    {{ dem_form.is_base_layer }}
+                    {{ dem_form.is_base_layer.label_tag }}
+                    <small class="form-text text-muted">Отметьте, если этот файл должен использоваться как базовый слой для всех пользователей</small>
+                </div>
+                {% endif %}
+                
+                <button type="submit" class="btn btn-primary">Загрузить DEM</button>
+            </form>
+            
+            {% if user_dem_files %}
+            <div class="recent-uploads">
+                <h3>Ваши последние DEM файлы</h3>
+                <ul class="uploads-list">
+                    {% for file in user_dem_files %}
+                    <li>
+                        <strong>{{ file.name }}</strong> 
+                        <span class="upload-date">{{ file.upload_date|date:"d.m.Y H:i" }}</span>
+                        {% if file.is_base_layer %}
+                        <span class="badge base-layer">Базовый слой</span>
+                        {% endif %}
+                        <p class="description">{{ file.description|truncatechars:100 }}</p>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Космические снимки -->
+        <div class="upload-section">
+            <h2>Космические снимки</h2>
+            <form method="post" action="{% url 'upload_satellite' %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="form-group">
+                    {{ satellite_form.name.label_tag }}
+                    {{ satellite_form.name }}
+                    <div class="error">{{ satellite_form.name.errors }}</div>
+                </div>
+                <div class="form-group">
+                    {{ satellite_form.file.label_tag }}
+                    {{ satellite_form.file }}
+                    <small class="form-text text-muted">Поддерживаются файлы GeoTIFF и изображения (jpg, png)</small>
+                    <div class="error">{{ satellite_form.file.errors }}</div>
+                </div>
+                <div class="form-group">
+                    {{ satellite_form.image_date.label_tag }}
+                    {{ satellite_form.image_date }}
+                    <div class="error">{{ satellite_form.image_date.errors }}</div>
+                </div>
+                <div class="form-group">
+                    {{ satellite_form.description.label_tag }}
+                    {{ satellite_form.description }}
+                    <div class="error">{{ satellite_form.description.errors }}</div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Загрузить снимок</button>
+            </form>
+            
+            {% if user_satellite_images %}
+            <div class="recent-uploads">
+                <h3>Ваши последние космические снимки</h3>
+                <ul class="uploads-list">
+                    {% for image in user_satellite_images %}
+                    <li>
+                        <strong>{{ image.name }}</strong> 
+                        <span class="upload-date">{{ image.upload_date|date:"d.m.Y H:i" }}</span>
+                        <span class="badge status-{{ image.status }}">{{ image.get_status_display }}</span>
+                        <p class="description">{{ image.description|truncatechars:100 }}</p>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="actions-panel">
+        <h2>Действия</h2>
+        <div class="actions-buttons">
+            <a href="{% url 'analyze' %}" class="btn btn-success">Создать анализ затопления</a>
+            <a href="{% url 'analysis_list' %}" class="btn btn-info">Мои анализы</a>
+            <a href="{% url 'map' %}" class="btn btn-secondary">Вернуться к карте</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block head %}
+<style>
+    .upload-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    
+    .upload-sections {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 30px;
+        margin: 20px 0;
+    }
+    
+    .upload-section {
+        flex: 1;
+        min-width: 300px;
+        background: #f9f9f9;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    
+    .form-group {
+        margin-bottom: 15px;
+    }
+    
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+    
+    .form-group input, .form-group textarea {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    
+    .form-check {
+        margin: 15px 0;
+    }
+    
+    .error {
+        color: #dc3545;
+        font-size: 14px;
+        margin-top: 5px;
+    }
+    
+    .form-text {
+        color: #6c757d;
+        font-size: 14px;
+        margin-top: 5px;
+    }
+    
+    .recent-uploads {
+        margin-top: 30px;
+    }
+    
+    .uploads-list {
+        list-style: none;
+        padding: 0;
+    }
+    
+    .uploads-list li {
+        background: #fff;
+        padding: 10px 15px;
+        margin-bottom: 10px;
+        border-radius: 4px;
+        border-left: 4px solid #3498db;
+    }
+    
+    .uploads-list .upload-date {
+        color: #6c757d;
+        font-size: 0.9em;
+        margin-left: 10px;
+    }
+    
+    .badge {
+        display: inline-block;
+        padding: 3px 7px;
+        border-radius: 3px;
+        font-size: 0.8em;
+        color: white;
+        margin-left: 10px;
+    }
+    
+    .badge.base-layer {
+        background-color: #28a745;
+    }
+    
+    .badge.status-new {
+        background-color: #17a2b8;
+    }
+    
+    .badge.status-processing {
+        background-color: #ffc107;
+        color: #212529;
+    }
+    
+    .badge.status-completed {
+        background-color: #28a745;
+    }
+    
+    .badge.status-error {
+        background-color: #dc3545;
+    }
+    
+    .description {
+        margin: 5px 0 0;
+        color: #333;
+    }
+    
+    .actions-panel {
+        background: #e9ecef;
+        padding: 20px;
+        margin-top: 30px;
+        border-radius: 8px;
+    }
+    
+    .actions-buttons {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    
+    .btn {
+        display: inline-block;
+        font-weight: 400;
+        text-align: center;
+        white-space: nowrap;
+        vertical-align: middle;
+        user-select: none;
+        border: 1px solid transparent;
+        padding: 0.375rem 0.75rem;
+        font-size: 1rem;
+        line-height: 1.5;
+        border-radius: 0.25rem;
+        cursor: pointer;
+        text-decoration: none;
+    }
+    
+    .btn-primary {
+        color: #fff;
+        background-color: #3498db;
+        border-color: #3498db;
+    }
+    
+    .btn-success {
+        color: #fff;
+        background-color: #28a745;
+        border-color: #28a745;
+    }
+    
+    .btn-info {
+        color: #fff;
+        background-color: #17a2b8;
+        border-color: #17a2b8;
+    }
+    
+    .btn-secondary {
+        color: #fff;
+        background-color: #6c757d;
+        border-color: #6c757d;
+    }
+    
+    .messages {
+        margin-bottom: 20px;
+    }
+    
+    .message {
+        padding: 10px 15px;
+        margin-bottom: 10px;
+        border-radius: 4px;
+    }
+    
+    .message.success {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .message.error {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    
+    @media (max-width: 768px) {
+        .upload-sections {
+            flex-direction: column;
+        }
+    }
+</style>
+{% endblock %}

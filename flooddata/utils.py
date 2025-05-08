@@ -5,6 +5,11 @@ from django.contrib.gis.geos import GEOSGeometry, MultiPolygon
 from django.conf import settings
 import numpy as np
 from datetime import datetime
+import rasterio
+from rasterio.features import shapes
+import geopandas as gpd
+from shapely.geometry import shape, mapping
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -293,3 +298,222 @@ def compare_dem_with_satellite(dem_path, satellite_mask_path, threshold=2.0, dif
         'false_negatives': int(false_negatives.sum()),
         'diff_map': diff_output_path
     }
+
+def process_satellite_image(satellite_image_path, output_mask_path=None, method='ndwi', threshold=0.2):
+    """
+    Обработка космического снимка для выделения водных объектов.
+    Args:
+        satellite_image_path: путь к космическому снимку (GeoTIFF, обычно многоканальный)
+        output_mask_path: путь для сохранения маски воды (опционально)
+        method: метод выделения воды ('ndwi', 'mndwi', 'awei', 'simple')
+        threshold: пороговое значение для бинаризации
+    Returns:
+        dict с маской водных объектов и статистикой
+    """
+    try:
+        with rasterio.open(satellite_image_path) as src:
+            # Проверяем количество каналов и их наличие
+            num_bands = src.count
+            
+            # Метод NDWI требует зеленый и ближний ИК каналы
+            if method == 'ndwi':
+                if num_bands < 2:
+                    raise ValueError("Для NDWI требуются 2 канала (зеленый и ближний ИК)")
+                green = src.read(1).astype(np.float32)
+                nir = src.read(2).astype(np.float32)
+                # Вычисляем NDWI
+                ndwi = (green - nir) / (green + nir + 1e-10)
+                # Бинаризация
+                water_mask = (ndwi > threshold).astype(np.uint8)
+            
+            # Метод MNDWI требует зеленый и средний ИК каналы
+            elif method == 'mndwi':
+                if num_bands < 3:
+                    raise ValueError("Для MNDWI требуются 3 канала (зеленый и средний ИК)")
+                green = src.read(1).astype(np.float32)
+                swir = src.read(3).astype(np.float32)
+                # Вычисляем MNDWI
+                mndwi = (green - swir) / (green + swir + 1e-10)
+                # Бинаризация
+                water_mask = (mndwi > threshold).astype(np.uint8)
+            
+            # Простой метод для RGB снимков
+            elif method == 'simple':
+                if num_bands < 3:
+                    # Если один канал, используем его напрямую
+                    if num_bands == 1:
+                        band = src.read(1).astype(np.float32)
+                        # Темные участки обычно вода
+                        water_mask = (band < threshold * 255).astype(np.uint8)
+                    else:
+                        raise ValueError("Для простого метода требуется 1 или 3 канала")
+                else:
+                    # Используем RGB и вычисляем яркость
+                    r = src.read(1).astype(np.float32)
+                    g = src.read(2).astype(np.float32)
+                    b = src.read(3).astype(np.float32)
+                    # Средняя яркость
+                    brightness = (r + g + b) / 3.0
+                    # Темные участки обычно вода
+                    water_mask = (brightness < threshold * 255).astype(np.uint8)
+            else:
+                raise ValueError(f"Неподдерживаемый метод выделения воды: {method}")
+            
+            # Сохраняем маску, если указан путь
+            if output_mask_path:
+                with rasterio.open(
+                    output_mask_path, 'w',
+                    driver='GTiff',
+                    height=water_mask.shape[0],
+                    width=water_mask.shape[1],
+                    count=1,
+                    dtype=water_mask.dtype,
+                    crs=src.crs,
+                    transform=src.transform
+                ) as dst:
+                    dst.write(water_mask, 1)
+            
+            # Вычисляем статистику
+            water_pixels = int(water_mask.sum())
+            total_pixels = water_mask.size
+            water_percent = (water_pixels / total_pixels) * 100 if total_pixels > 0 else 0
+            
+            return {
+                'water_mask': water_mask,
+                'water_pixels': water_pixels,
+                'total_pixels': total_pixels,
+                'water_percent': water_percent,
+                'mask_path': output_mask_path
+            }
+    
+    except Exception as e:
+        logger.error(f"Ошибка при обработке космического снимка: {str(e)}")
+        raise
+
+def create_flood_mask_vector(mask_path, output_vector_path=None, min_area=100):
+    """
+    Создает векторный слой из растровой маски затопления.
+    Args:
+        mask_path: путь к растровой маске затопления (GeoTIFF, 1 - вода, 0 - суша)
+        output_vector_path: путь для сохранения векторного слоя (опционально)
+        min_area: минимальная площадь полигона в пикселях
+    Returns:
+        GeoJSON строка с полигонами затопления и статистика
+    """
+    try:
+        with rasterio.open(mask_path) as src:
+            # Читаем маску
+            image = src.read(1)
+            # Зоны со значением 1 - затопленные территории
+            mask = image == 1
+            
+            # Получаем полигоны из растра
+            results = (
+                {'properties': {'value': value}, 'geometry': s}
+                for i, (s, value) in enumerate(shapes(image, mask=mask, transform=src.transform))
+            )
+            
+            # Преобразуем в GeoDataFrame
+            geoms = list(results)
+            gdf = gpd.GeoDataFrame.from_features(geoms, crs=src.crs)
+            
+            # Фильтруем маленькие полигоны
+            if 'geometry' in gdf.columns:
+                # Вычисляем площадь полигонов в пикселях
+                gdf['area_px'] = gdf.geometry.area / (src.transform.a * src.transform.e)
+                gdf = gdf[gdf.area_px > min_area]
+                
+                # Вычисляем площадь в кв. км (при условии, что CRS в метрах)
+                gdf['area_sqkm'] = gdf.geometry.area / 1_000_000
+                
+                # Сохраняем векторный слой
+                if output_vector_path:
+                    gdf.to_file(output_vector_path, driver='GeoJSON')
+                
+                # Вычисляем общую площадь затопления
+                total_area_sqkm = gdf['area_sqkm'].sum()
+                
+                # Преобразуем в GeoJSON для Django
+                geojson_str = gdf.to_json()
+                
+                return {
+                    'vector_data': geojson_str,
+                    'total_area_sqkm': float(total_area_sqkm),
+                    'num_polygons': len(gdf),
+                    'vector_path': output_vector_path
+                }
+            else:
+                logger.warning("Не найдены полигоны затопления в маске")
+                return {
+                    'vector_data': None,
+                    'total_area_sqkm': 0.0,
+                    'num_polygons': 0,
+                    'vector_path': None
+                }
+    
+    except Exception as e:
+        logger.error(f"Ошибка при создании векторного слоя затопления: {str(e)}")
+        raise
+
+def calculate_flood_statistics(flood_vector_path, admin_boundaries_path=None):
+    """
+    Рассчитывает статистику затопления по административным границам.
+    Args:
+        flood_vector_path: путь к векторному слою затопления (GeoJSON)
+        admin_boundaries_path: путь к векторному слою административных границ
+    Returns:
+        dict со статистикой затопления по районам
+    """
+    try:
+        # Загружаем слой затопления
+        flood_gdf = gpd.read_file(flood_vector_path)
+        
+        # Если нет слоя административных границ, возвращаем общую статистику
+        if not admin_boundaries_path:
+            total_area_sqkm = flood_gdf.geometry.area.sum() / 1_000_000
+            return {
+                'total_area_sqkm': float(total_area_sqkm),
+                'num_polygons': len(flood_gdf)
+            }
+        
+        # Загружаем слой административных границ
+        admin_gdf = gpd.read_file(admin_boundaries_path)
+        
+        # Проверяем, что CRS одинаковые, иначе преобразуем
+        if flood_gdf.crs != admin_gdf.crs:
+            flood_gdf = flood_gdf.to_crs(admin_gdf.crs)
+        
+        # Выполняем пересечение и получаем статистику по районам
+        stats = []
+        for idx, admin_row in admin_gdf.iterrows():
+            admin_geom = admin_row.geometry
+            admin_name = admin_row.get('name', f'Район {idx+1}')
+            
+            # Вычисляем пересечение с затоплением
+            intersection = flood_gdf.geometry.intersection(admin_geom)
+            intersection_area = sum(geom.area for geom in intersection if not geom.is_empty) / 1_000_000
+            
+            # Общая площадь района
+            admin_area = admin_geom.area / 1_000_000
+            
+            # Процент затопления
+            flood_percent = (intersection_area / admin_area) * 100 if admin_area > 0 else 0
+            
+            stats.append({
+                'admin_name': admin_name,
+                'admin_area_sqkm': float(admin_area),
+                'flood_area_sqkm': float(intersection_area),
+                'flood_percent': float(flood_percent)
+            })
+        
+        # Сортируем по проценту затопления в порядке убывания
+        stats.sort(key=lambda x: x['flood_percent'], reverse=True)
+        
+        return {
+            'admin_stats': stats,
+            'total_area_sqkm': float(sum(item['flood_area_sqkm'] for item in stats))
+        }
+    
+    except Exception as e:
+        logger.error(f"Ошибка при расчете статистики затопления: {str(e)}")
+        raise

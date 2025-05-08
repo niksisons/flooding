@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Регистрация{% endblock %}
+{% block content %}
+<div class="register-container">
+    <h2>Регистрация нового пользователя</h2>
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-group">
+            {{ form.username.label_tag }}
+            {{ form.username }}
+            <small class="form-text text-muted">{{ form.username.help_text }}</small>
+            <div class="error">{{ form.username.errors }}</div>
+        </div>
+
+        <div class="form-group">
+            {{ form.email.label_tag }}
+            {{ form.email }}
+            <small class="form-text text-muted">{{ form.email.help_text }}</small>
+            <div class="error">{{ form.email.errors }}</div>
+        </div>
+
+        <div class="form-group">
+            {{ form.first_name.label_tag }}
+            {{ form.first_name }}
+            <small class="form-text text-muted">{{ form.first_name.help_text }}</small>
+        </div>
+
+        <div class="form-group">
+            {{ form.last_name.label_tag }}
+            {{ form.last_name }}
+            <small class="form-text text-muted">{{ form.last_name.help_text }}</small>
+        </div>
+
+        <div class="form-group">
+            {{ form.password1.label_tag }}
+            {{ form.password1 }}
+            <small class="form-text text-muted">{{ form.password1.help_text }}</small>
+            <div class="error">{{ form.password1.errors }}</div>
+        </div>
+
+        <div class="form-group">
+            {{ form.password2.label_tag }}
+            {{ form.password2 }}
+            <small class="form-text text-muted">{{ form.password2.help_text }}</small>
+            <div class="error">{{ form.password2.errors }}</div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Зарегистрироваться</button>
+    </form>
+    <p class="mt-3">
+        Уже есть аккаунт? <a href="{% url 'login' %}">Войти</a>
+    </p>
+</div>
+{% endblock %}
+
+{% block head %}
+<style>
+    .register-container {
+        max-width: 500px;
+        margin: 0 auto;
+    }
+    .form-group {
+        margin-bottom: 15px;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+    .form-group input {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    .error {
+        color: #dc3545;
+        font-size: 14px;
+        margin-top: 5px;
+    }
+    .form-text {
+        color: #6c757d;
+        font-size: 14px;
+        margin-top: 5px;
+    }
+    button {
+        padding: 10px 15px;
+        background-color: #3498db;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    button:hover {
+        background-color: #2980b9;
+    }
+</style>
+{% endblock %}

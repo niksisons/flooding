@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Вход{% endblock %}
+{% block content %}
+<div class="login-container">
+    <div class="login-card">
+        <div class="login-header">
+            <i class="material-icons">login</i>
+            <h2>Вход в систему</h2>
+        </div>
+        
+        <form method="post">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="id_username">Имя пользователя:</label>
+                <div class="input-with-icon">
+                    <i class="material-icons">person</i>
+                    <input type="text" name="username" id="id_username" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="id_password">Пароль:</label>
+                <div class="input-with-icon">
+                    <i class="material-icons">lock</i>
+                    <input type="password" name="password" id="id_password" required>
+                </div>
+            </div>
+            <button type="submit" class="login-btn"><i class="material-icons">login</i> Войти</button>
+        </form>
+        
+        <div class="login-footer">
+            <p>Еще нет аккаунта? <a href="{% url 'register' %}">Зарегистрироваться</a></p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block head %}
+<style>
+    .login-container {
+        max-width: 450px;
+        margin: 30px auto;
+    }
+    
+    .login-card {
+        background-color: #fff;
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow);
+        padding: 25px;
+        border: 1px solid var(--medium-gray);
+    }
+    
+    .login-header {
+        text-align: center;
+        margin-bottom: 25px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .login-header i {
+        font-size: 48px;
+        color: var(--primary-color);
+        margin-bottom: 15px;
+    }
+    
+    .login-header h2 {
+        color: var(--dark-gray);
+        margin: 0;
+        padding: 0;
+    }
+    
+    .login-header h2:after {
+        display: none;
+    }
+    
+    .input-with-icon {
+        position: relative;
+    }
+    
+    .input-with-icon i {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--primary-color);
+    }
+    
+    .input-with-icon input {
+        padding-left: 40px;
+    }
+    
+    .login-btn {
+        width: 100%;
+        margin-top: 10px;
+        padding: 10px;
+        background-color: var(--primary-color);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .login-btn i {
+        margin-right: 8px;
+    }
+    
+    .login-footer {
+        margin-top: 20px;
+        text-align: center;
+        border-top: 1px solid var(--medium-gray);
+        padding-top: 15px;
+    }
+    
+    .login-footer a {
+        color: var(--primary-color);
+        text-decoration: none;
+        font-weight: 500;
+    }
+    
+    .login-footer a:hover {
+        text-decoration: underline;
+    }
+    
+    @media (max-width: 500px) {
+        .login-container {
+            margin: 15px;
+            width: auto;
+        }
+        
+        .login-card {
+            padding: 20px 15px;
+        }
+    }
+</style>
+{% endblock %}

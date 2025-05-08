@@ -26,4 +26,4 @@ class WaterLevelMeasurementSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = WaterLevelMeasurement
-        fields = ('id', 'point', 'point_name', 'timestamp', 'value', 'is_forecast') 
+        fields = ('id', 'point', 'point_name', 'timestamp', 'value', 'is_forecast')

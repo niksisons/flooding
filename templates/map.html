@@ -1,201 +1,362 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Карта затоплений</title>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: Arial, sans-serif;
-        }
-        #map {
-            width: 100%;
-            height: 100vh;
-        }
-        .map-controls {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            z-index: 1000;
-            background: white;
-            padding: 10px;
-            border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        .map-controls h3 {
-            margin-top: 0;
-        }
-        .layer-control {
-            margin-bottom: 5px;
-        }
-    </style>
-</head>
-<body>
-    <div id="map"></div>
-    
-    <div class="map-controls">
-        <h3>Слои карты</h3>
-        <div class="layer-control">
-            <input type="checkbox" id="floodZones" checked>
-            <label for="floodZones">Зоны затопления</label>
-        </div>
-        <div class="layer-control">
-            <input type="checkbox" id="floodEvents" checked>
-            <label for="floodEvents">События затопления</label>
-        </div>
-        <div class="layer-control">
-            <input type="checkbox" id="measurementPoints" checked>
-            <label for="measurementPoints">Точки измерения</label>
-        </div>
-        <hr>
-        <div>
-            <a href="/" class="btn">На главную</a>
-        </div>
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Карта затоплений{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        overflow: hidden;
+        height: 100vh;
+    }
+    .container {
+        margin: 0;
+        padding: 0;
+        max-width: 100%;
+        flex: 1;
+    }
+    #map {
+        width: 100%;
+        height: calc(100vh - 56px - 40px); /* вычитаем высоту навигации и футера */
+    }
+    .map-controls {
+        position: absolute;
+        top: 70px;
+        right: 20px;
+        z-index: 1000;
+        background: white;
+        padding: 15px;
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow);
+        max-width: 280px;
+    }
+    .map-controls h3 {
+        margin-top: 0;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        color: var(--primary-dark);
+        font-size: 16px;
+    }
+    .map-controls h3 i {
+        margin-right: 8px;
+    }
+    .layer-control {
+        margin: 10px 0;
+        display: flex;
+        align-items: center;
+    }
+    .layer-control input[type="checkbox"] {
+        margin-right: 10px;
+    }
+    .layer-control label {
+        cursor: pointer;
+        user-select: none;
+    }
+    .legend {
+        background: white;
+        padding: 12px;
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow);
+        position: absolute;
+        bottom: 60px;
+        right: 20px;
+        z-index: 1000;
+        font-size: 13px;
+    }
+    .legend h4 {
+        margin-top: 0;
+        margin-bottom: 10px;
+        font-size: 14px;
+        color: var(--primary-dark);
+    }
+    .legend-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 6px;
+    }
+    .legend-color {
+        width: 16px;
+        height: 16px;
+        border-radius: 3px;
+        margin-right: 8px;
+    }
+    .map-back-btn {
+        margin-top: 12px;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .map-back-btn i {
+        margin-right: 6px;
+    }
+    hr {
+        border: none;
+        border-top: 1px solid var(--medium-gray);
+        margin: 12px 0;
+    }
+    footer {
+        position: fixed;
+        bottom: 0;
+        width: 100%;
+        background: var(--primary-dark);
+        color: white;
+        text-align: center;
+        padding: 10px;
+        z-index: 999;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="map"></div>
+
+<div class="map-controls">
+    <h3><i class="material-icons">layers</i> Слои карты</h3>
+    <div class="layer-control">
+        <input type="checkbox" id="floodZones" checked>
+        <label for="floodZones">Зоны затопления</label>
     </div>
+    <div class="layer-control">
+        <input type="checkbox" id="floodEvents" checked>
+        <label for="floodEvents">События затопления</label>
+    </div>
+    <div class="layer-control">
+        <input type="checkbox" id="measurementPoints" checked>
+        <label for="measurementPoints">Точки измерения</label>
+    </div>
+    <div class="layer-control">
+        <input type="checkbox" id="floodAnalyses">
+        <label for="floodAnalyses">Результаты анализов</label>
+    </div>
+    <hr>
+    <a href="{% url 'home' %}" class="btn btn-secondary map-back-btn"><i class="material-icons">arrow_back</i> На главную</a>
+</div>
+
+<div class="legend">
+    <h4>Легенда</h4>
+    <div class="legend-item">
+        <div class="legend-color" style="background-color: #FFFF00;"></div>
+        <span>Низкий риск затопления</span>
+    </div>
+    <div class="legend-item">
+        <div class="legend-color" style="background-color: #FFA500;"></div>
+        <span>Средний риск затопления</span>
+    </div>
+    <div class="legend-item">
+        <div class="legend-color" style="background-color: #FF0000;"></div>
+        <span>Высокий риск затопления</span>
+    </div>
+    <div class="legend-item">
+        <div class="legend-color" style="background-color: #0000FF; opacity: 0.3;"></div>
+        <span>События затопления</span>
+    </div>
+    <div class="legend-item">
+        <div class="legend-color" style="background-color: #3388ff;"></div>
+        <span>Точки измерения</span>
+    </div>
+    <div class="legend-item">
+        <div class="legend-color" style="background-color: #8A2BE2; opacity: 0.5;"></div>
+        <span>Результаты анализов</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    // Инициализация карты
+    var map = L.map('map').setView([55.75, 37.61], 10); // Центр на Москве, можно изменить
     
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    // Добавление базовой карты OpenStreetMap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
     
-    <script>
-        // Инициализация карты
-        var map = L.map('map').setView([55.75, 37.61], 10); // Центр на Москве, можно изменить
-        
-        // Добавление базовой карты OpenStreetMap
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // Добавление других типов карт
+    var sateliteTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+    });
+    
+    // Контроль слоев
+    var baseMaps = {
+        "Карта": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
-        
-        // Загрузка данных через API
-        const API_BASE_URL = '/api/';
-        
-        // Слои
-        var floodZonesLayer = L.layerGroup().addTo(map);
-        var floodEventsLayer = L.layerGroup().addTo(map);
-        var measurementPointsLayer = L.layerGroup().addTo(map);
-        
-        // Функция для загрузки данных
-        function loadData() {
-            // Загрузка зон затопления
-            if (document.getElementById('floodZones').checked) {
-                fetch(API_BASE_URL + 'flood-zones/')
-                    .then(response => response.json())
-                    .then(data => {
-                        floodZonesLayer.clearLayers();
-                        if (data.features) {
-                            L.geoJSON(data, {
-                                style: function(feature) {
-                                    // Стиль в зависимости от уровня риска
-                                    var riskLevel = feature.properties.risk_level;
-                                    var color = riskLevel === 3 ? '#FF0000' : 
-                                               riskLevel === 2 ? '#FFA500' : '#FFFF00';
-                                    return {
-                                        fillColor: color,
-                                        weight: 2,
-                                        opacity: 1,
-                                        color: 'white',
-                                        fillOpacity: 0.5
-                                    };
-                                },
-                                onEachFeature: function(feature, layer) {
-                                    // Добавление всплывающей подсказки
-                                    layer.bindPopup(
-                                        '<h3>' + feature.properties.name + '</h3>' +
-                                        '<p>' + feature.properties.description + '</p>' +
-                                        '<p>Уровень риска: ' + feature.properties.risk_level + '</p>'
-                                    );
-                                }
-                            }).addTo(floodZonesLayer);
-                        }
-                    })
-                    .catch(error => console.error('Ошибка при загрузке зон затопления:', error));
-            } else {
-                floodZonesLayer.clearLayers();
-            }
-            
-            // Загрузка событий затопления
-            if (document.getElementById('floodEvents').checked) {
-                fetch(API_BASE_URL + 'flood-events/')
-                    .then(response => response.json())
-                    .then(data => {
-                        floodEventsLayer.clearLayers();
-                        if (data.features) {
-                            L.geoJSON(data, {
-                                style: function(feature) {
-                                    // Стиль для событий затопления
-                                    return {
-                                        fillColor: '#0000FF',
-                                        weight: 2,
-                                        opacity: 1,
-                                        color: 'white',
-                                        fillOpacity: 0.3
-                                    };
-                                },
-                                onEachFeature: function(feature, layer) {
-                                    // Добавление всплывающей подсказки
-                                    layer.bindPopup(
-                                        '<h3>' + feature.properties.title + '</h3>' +
-                                        '<p>' + feature.properties.description + '</p>' +
-                                        '<p>Начало: ' + feature.properties.event_start + '</p>' +
-                                        '<p>Уровень воды: ' + feature.properties.water_level + ' м</p>'
-                                    );
-                                }
-                            }).addTo(floodEventsLayer);
-                        }
-                    })
-                    .catch(error => console.error('Ошибка при загрузке событий затопления:', error));
-            } else {
-                floodEventsLayer.clearLayers();
-            }
-            
-            // Загрузка точек измерения
-            if (document.getElementById('measurementPoints').checked) {
-                fetch(API_BASE_URL + 'measurement-points/')
-                    .then(response => response.json())
-                    .then(data => {
-                        measurementPointsLayer.clearLayers();
-                        if (data.features) {
-                            L.geoJSON(data, {
-                                pointToLayer: function(feature, latlng) {
-                                    return L.circleMarker(latlng, {
-                                        radius: 8,
-                                        fillColor: "#3388ff",
-                                        color: "#000",
-                                        weight: 1,
-                                        opacity: 1,
-                                        fillOpacity: 0.8
-                                    });
-                                },
-                                onEachFeature: function(feature, layer) {
-                                    // Добавление всплывающей подсказки
-                                    layer.bindPopup(
-                                        '<h3>' + feature.properties.name + '</h3>' +
-                                        '<p>Код: ' + feature.properties.code + '</p>' +
-                                        '<p>' + feature.properties.description + '</p>'
-                                    );
-                                }
-                            }).addTo(measurementPointsLayer);
-                        }
-                    })
-                    .catch(error => console.error('Ошибка при загрузке точек измерения:', error));
-            } else {
-                measurementPointsLayer.clearLayers();
-            }
+        }),
+        "Спутник": sateliteTiles
+    };
+    
+    L.control.layers(baseMaps).addTo(map);
+    
+    // Загрузка данных через API
+    const API_BASE_URL = '/api/';
+    
+    // Слои
+    var floodZonesLayer = L.layerGroup().addTo(map);
+    var floodEventsLayer = L.layerGroup().addTo(map);
+    var measurementPointsLayer = L.layerGroup().addTo(map);
+    var floodAnalysesLayer = L.layerGroup();
+    
+    // Функция для загрузки данных
+    function loadData() {
+        // Загрузка зон затопления
+        if (document.getElementById('floodZones').checked) {
+            fetch(API_BASE_URL + 'flood-zones/')
+                .then(response => response.json())
+                .then(data => {
+                    floodZonesLayer.clearLayers();
+                    if (data.features && data.features.length > 0) {
+                        L.geoJSON(data, {
+                            style: function(feature) {
+                                // Стиль в зависимости от уровня риска
+                                var riskLevel = feature.properties.risk_level;
+                                var color = riskLevel === 3 ? '#FF0000' : 
+                                           riskLevel === 2 ? '#FFA500' : '#FFFF00';
+                                return {
+                                    fillColor: color,
+                                    weight: 2,
+                                    opacity: 1,
+                                    color: 'white',
+                                    fillOpacity: 0.5
+                                };
+                            },
+                            onEachFeature: function(feature, layer) {
+                                // Добавление всплывающей подсказки
+                                layer.bindPopup(
+                                    '<h3>' + feature.properties.name + '</h3>' +
+                                    '<p>' + feature.properties.description + '</p>' +
+                                    '<p>Уровень риска: ' + feature.properties.risk_level + '</p>'
+                                );
+                            }
+                        }).addTo(floodZonesLayer);
+                    }
+                })
+                .catch(error => console.error('Ошибка при загрузке зон затопления:', error));
+        } else {
+            floodZonesLayer.clearLayers();
         }
         
-        // Обработчики событий для чекбоксов
-        document.getElementById('floodZones').addEventListener('change', loadData);
-        document.getElementById('floodEvents').addEventListener('change', loadData);
-        document.getElementById('measurementPoints').addEventListener('change', loadData);
+        // Загрузка событий затопления
+        if (document.getElementById('floodEvents').checked) {
+            fetch(API_BASE_URL + 'flood-events/')
+                .then(response => response.json())
+                .then(data => {
+                    floodEventsLayer.clearLayers();
+                    if (data.features && data.features.length > 0) {
+                        L.geoJSON(data, {
+                            style: function(feature) {
+                                // Стиль для событий затопления
+                                return {
+                                    fillColor: '#0000FF',
+                                    weight: 2,
+                                    opacity: 1,
+                                    color: 'white',
+                                    fillOpacity: 0.3
+                                };
+                            },
+                            onEachFeature: function(feature, layer) {
+                                // Добавление всплывающей подсказки
+                                layer.bindPopup(
+                                    '<h3>' + feature.properties.title + '</h3>' +
+                                    '<p>' + feature.properties.description + '</p>' +
+                                    '<p>Начало: ' + feature.properties.event_start + '</p>' +
+                                    '<p>Уровень воды: ' + feature.properties.water_level + ' м</p>'
+                                );
+                            }
+                        }).addTo(floodEventsLayer);
+                    }
+                })
+                .catch(error => console.error('Ошибка при загрузке событий затопления:', error));
+        } else {
+            floodEventsLayer.clearLayers();
+        }
         
-        // Загрузка данных при загрузке страницы
-        loadData();
-    </script>
-</body>
-</html> 
+        // Загрузка точек измерения
+        if (document.getElementById('measurementPoints').checked) {
+            fetch(API_BASE_URL + 'measurement-points/')
+                .then(response => response.json())
+                .then(data => {
+                    measurementPointsLayer.clearLayers();
+                    if (data.features && data.features.length > 0) {
+                        L.geoJSON(data, {
+                            pointToLayer: function(feature, latlng) {
+                                return L.circleMarker(latlng, {
+                                    radius: 8,
+                                    fillColor: "#3388ff",
+                                    color: "#000",
+                                    weight: 1,
+                                    opacity: 1,
+                                    fillOpacity: 0.8
+                                });
+                            },
+                            onEachFeature: function(feature, layer) {
+                                // Добавление всплывающей подсказки
+                                layer.bindPopup(
+                                    '<h3>' + feature.properties.name + '</h3>' +
+                                    '<p>Код: ' + feature.properties.code + '</p>' +
+                                    '<p>' + feature.properties.description + '</p>'
+                                );
+                            }
+                        }).addTo(measurementPointsLayer);
+                    }
+                })
+                .catch(error => console.error('Ошибка при загрузке точек измерения:', error));
+        } else {
+            measurementPointsLayer.clearLayers();
+        }
+        
+        // Загрузка результатов анализов затопления
+        if (document.getElementById('floodAnalyses').checked) {
+            fetch(API_BASE_URL + 'flood-analyses/')
+                .then(response => response.json())
+                .then(data => {
+                    floodAnalysesLayer.clearLayers();
+                    if (data.features && data.features.length > 0) {
+                        L.geoJSON(data, {
+                            style: function(feature) {
+                                return {
+                                    fillColor: '#8A2BE2', // фиолетовый
+                                    weight: 2,
+                                    opacity: 1,
+                                    color: 'white',
+                                    fillOpacity: 0.5
+                                };
+                            },
+                            onEachFeature: function(feature, layer) {
+                                layer.bindPopup(
+                                    '<h3>' + feature.properties.name + '</h3>' +
+                                    '<p>Дата создания: ' + feature.properties.created_at + '</p>' +
+                                    '<p>Площадь затопления: ' + feature.properties.flooded_area_sqkm + ' кв.км</p>' +
+                                    '<a href="/analysis/' + feature.properties.id + '/" class="btn">Подробнее</a>'
+                                );
+                            }
+                        }).addTo(floodAnalysesLayer);
+                        map.addLayer(floodAnalysesLayer);
+                    }
+                })
+                .catch(error => console.error('Ошибка при загрузке анализов затопления:', error));
+        } else {
+            map.removeLayer(floodAnalysesLayer);
+        }
+    }
+    
+    // Обработчики событий для чекбоксов
+    document.getElementById('floodZones').addEventListener('change', loadData);
+    document.getElementById('floodEvents').addEventListener('change', loadData);
+    document.getElementById('measurementPoints').addEventListener('change', loadData);
+    document.getElementById('floodAnalyses').addEventListener('change', loadData);
+    
+    // Загрузка данных при загрузке страницы
+    loadData();
+    
+    // Обновление размера карты при изменении размера окна
+    window.addEventListener('resize', function() {
+        map.invalidateSize();
+    });
+</script>
+{% endblock %} 

@@ -11,4 +11,4 @@ if __name__ == "__main__":
             "Не удалось импортировать Django. Убедитесь, что он установлен и "
             "доступен в PYTHONPATH."
         ) from exc
-    execute_from_command_line(sys.argv) 
+    execute_from_command_line(sys.argv)
