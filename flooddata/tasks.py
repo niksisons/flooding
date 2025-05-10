@@ -2,7 +2,13 @@ from celery import shared_task
 import logging
 from django.utils import timezone
 from datetime import timedelta
-from .models import FloodEvent, MeasurementPoint, WaterLevelMeasurement
+from .models import FloodEvent, MeasurementPoint, WaterLevelMeasurement, FloodAnalysis
+from .utils import process_satellite_image, create_flood_mask_vector
+import os
+from django.conf import settings
+from django.core.files import File
+from django.contrib.gis.geos import GEOSGeometry, MultiPolygon as GEOSMultiPolygon
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -99,3 +105,89 @@ def detect_flood_events():
     except Exception as e:
         logger.error(f"Ошибка при определении событий: {str(e)}")
         return False 
+
+@shared_task(bind=True, max_retries=3)
+def process_flood_analysis(self, analysis_id):
+    """
+    Задача Celery для обработки анализа затопления
+    """
+    analysis = None
+    try:
+        analysis = FloodAnalysis.objects.get(id=analysis_id)
+        
+        # Обновляем статус
+        analysis.status = 'processing'
+        analysis.save()
+        
+        # Получаем пути к файлам
+        dem_path = analysis.dem_file.file.path
+        satellite_path = analysis.satellite_image.file.path
+        
+        # Проверяем существование файлов
+        if not os.path.exists(dem_path):
+            raise FileNotFoundError(f"DEM файл не найден: {dem_path}")
+        if not os.path.exists(satellite_path):
+            raise FileNotFoundError(f"Спутниковый снимок не найден: {satellite_path}")
+        
+        # Создаем директорию для результатов
+        output_dir = os.path.join(settings.MEDIA_ROOT, 'analysis_results')
+        os.makedirs(output_dir, exist_ok=True)
+        
+        base_name = f"{analysis.id}_{analysis.name.replace(' ', '_')}"
+        mask_path = os.path.join(output_dir, f"{base_name}_water_mask.tif")
+        vector_path = os.path.join(output_dir, f"{base_name}_flood_vector.geojson")
+        
+        # 1. Обрабатываем снимок для выделения воды
+        logger.info(f"Начало обработки спутникового снимка: {satellite_path}")
+        mask_result = process_satellite_image(satellite_path, mask_path, method='simple')
+        logger.info("Обработка спутникового снимка завершена")
+        
+        # 2. Создаем векторный слой маски затопления
+        logger.info(f"Начало создания векторного слоя: {mask_path}")
+        vector_result = create_flood_mask_vector(mask_path, vector_path)
+        logger.info("Создание векторного слоя завершено")
+        
+        # 3. Сохраняем результаты
+        analysis.flood_mask.name = f"analysis_results/{base_name}_water_mask.tif"
+        
+        # 4. Обновляем статистику
+        if vector_result['total_area_sqkm'] > 0:
+            # Загружаем GeoJSON данные
+            geojson_data = json.loads(vector_result['vector_data'])
+            
+            # Создаем MultiPolygon из всех полигонов
+            polygons = []
+            for feature in geojson_data['features']:
+                geom = GEOSGeometry(json.dumps(feature['geometry']))
+                polygons.append(geom)
+            
+            # Объединяем в MultiPolygon
+            multi_polygon = GEOSMultiPolygon(polygons)
+            
+            # Сохраняем в модель
+            analysis.flood_vector = multi_polygon
+            analysis.flooded_area_sqkm = vector_result['total_area_sqkm']
+        
+        analysis.status = 'completed'
+        analysis.save()
+        logger.info(f"Анализ {analysis_id} успешно завершен")
+        
+        return True
+        
+    except Exception as e:
+        error_message = f"Ошибка при обработке анализа затопления: {str(e)}"
+        logger.error(error_message)
+        if analysis:
+            analysis.status = 'error'
+            analysis.error_message = error_message
+            analysis.save()
+        
+        # Пробуем повторить задачу
+        try:
+            self.retry(exc=e, countdown=60)  # Повторная попытка через 1 минуту
+        except self.MaxRetriesExceededError:
+            logger.error(f"Превышено максимальное количество попыток для анализа {analysis_id}")
+            if analysis:
+                analysis.error_message += "\nПревышено максимальное количество попыток"
+                analysis.save()
+            raise 

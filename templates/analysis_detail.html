@@ -438,4 +438,36 @@
     });
 </script>
 {% endif %}
+
+{% if analysis.status == 'pending' or analysis.status == 'processing' %}
+<script>
+    function checkAnalysisStatus() {
+        fetch('/api/flood-analysis/{{ analysis.id }}/status/')
+            .then(response => response.json())
+            .then(data => {
+                // Обновляем статус
+                document.querySelector('.badge').textContent = 
+                    data.status === 'pending' ? 'В очереди' :
+                    data.status === 'processing' ? 'В обработке' :
+                    data.status === 'completed' ? 'Завершено' : 'Ошибка';
+                
+                // Если анализ завершен или произошла ошибка
+                if (data.is_completed || data.has_error) {
+                    // Перезагружаем страницу для отображения результатов
+                    window.location.reload();
+                } else {
+                    // Продолжаем проверку статуса
+                    setTimeout(checkAnalysisStatus, 5000);
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка при проверке статуса:', error);
+                setTimeout(checkAnalysisStatus, 5000);
+            });
+    }
+    
+    // Запускаем проверку статуса
+    checkAnalysisStatus();
+</script>
+{% endif %}
 {% endblock %}

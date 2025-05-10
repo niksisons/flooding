@@ -198,6 +198,7 @@ class FloodAnalysis(models.Model):
     error_message = models.TextField(blank=True, verbose_name="Сообщение об ошибке")
     flooded_area_sqkm = models.FloatField(null=True, blank=True, verbose_name="Площадь затопления (кв.км)")
     compared_with_base = models.BooleanField(default=False, verbose_name="Сравнено с базовым слоем")
+    task_id = models.CharField(max_length=255, null=True, blank=True, verbose_name="ID задачи Celery")
     
     class Meta:
         verbose_name = "Анализ затопления"

@@ -205,8 +205,10 @@ def analyze_view(request):
             analysis.status = 'pending'
             analysis.save()
             
-            # Здесь можно запустить задачу обработки в фоне (Celery)
-            # Для демонстрации просто покажем сообщение
+            # Запускаем задачу обработки в фоне через Celery
+            from .tasks import process_flood_analysis
+            process_flood_analysis.delay(analysis.id)
+            
             messages.success(request, f"Анализ затопления '{analysis.name}' поставлен в очередь")
             return redirect('analysis_list')
     else:
@@ -252,28 +254,67 @@ def analysis_detail(request, analysis_id):
 
 @login_required
 def process_analysis(request, analysis_id):
-    """Запуск обработки анализа (для демонстрации)"""
+    """Запуск обработки анализа"""
+    try:
+        analysis = get_object_or_404(FloodAnalysis, pk=analysis_id)
+        
+        # Проверка прав доступа - только владелец или админ
+        if analysis.created_by != request.user and not request.user.is_staff:
+            messages.error(request, "У вас нет прав для запуска этого анализа")
+            return redirect('analysis_list')
+        
+        # Проверка статуса анализа
+        if analysis.status not in ['pending', 'error']:
+            messages.error(request, "Этот анализ уже обрабатывается или завершен")
+            return redirect('analysis_detail', analysis_id=analysis_id)
+        
+        # Проверяем наличие необходимых файлов
+        if not analysis.dem_file or not analysis.satellite_image:
+            messages.error(request, "Отсутствуют необходимые файлы для анализа")
+            return redirect('analysis_detail', analysis_id=analysis_id)
+        
+        # Обновляем статус перед запуском
+        analysis.status = 'processing'
+        analysis.error_message = ''
+        analysis.save()
+        
+        # Запускаем задачу обработки в фоне через Celery
+        from .tasks import process_flood_analysis
+        task = process_flood_analysis.delay(analysis.id)
+        
+        # Сохраняем ID задачи для отслеживания
+        analysis.task_id = task.id
+        analysis.save()
+        
+        messages.success(request, f"Анализ '{analysis.name}' запущен в обработку")
+        return redirect('analysis_detail', analysis_id=analysis_id)
+        
+    except Exception as e:
+        logger.error(f"Ошибка при запуске анализа {analysis_id}: {str(e)}")
+        messages.error(request, f"Произошла ошибка при запуске анализа: {str(e)}")
+        return redirect('analysis_list')
+
+@login_required
+def check_analysis_status(request, analysis_id):
+    """API endpoint для проверки статуса анализа"""
     analysis = get_object_or_404(FloodAnalysis, pk=analysis_id)
     
-    # Проверка прав доступа - только владелец или админ
+    # Проверка прав доступа
     if analysis.created_by != request.user and not request.user.is_staff:
-        messages.error(request, "У вас нет прав для запуска этого анализа")
-        return redirect('analysis_list')
+        return JsonResponse({
+            'error': 'У вас нет прав для просмотра этого анализа'
+        }, status=403)
     
-    # Проверка статуса анализа
-    if analysis.status not in ['pending', 'error']:
-        messages.error(request, "Этот анализ уже обрабатывается или завершен")
-        return redirect('analysis_detail', analysis_id=analysis_id)
-    
-    # Имитация запуска обработки
-    analysis.status = 'processing'
-    analysis.save()
-    
-    # Здесь должен быть запуск реальной обработки в фоне (например, через Celery)
-    # Для демонстрации просто покажем сообщение
-    messages.success(request, f"Анализ '{analysis.name}' запущен в обработку")
-    
-    return redirect('analysis_detail', analysis_id=analysis_id)
+    return JsonResponse({
+        'id': analysis.id,
+        'name': analysis.name,
+        'status': analysis.status,
+        'error_message': analysis.error_message,
+        'flooded_area_sqkm': analysis.flooded_area_sqkm,
+        'created_at': analysis.created_at.isoformat(),
+        'is_completed': analysis.status == 'completed',
+        'has_error': analysis.status == 'error'
+    })
 
 # API для GeoJSON (для Leaflet)
 def flood_zones_geojson(request):
