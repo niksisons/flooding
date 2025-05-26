@@ -67,36 +67,36 @@
         <h2>Результаты анализа</h2>
         
         <div class="result-cards">
-            {% if analysis.flood_mask %}
             <div class="result-card">
-                <h3>Маска затопления</h3>
-                <div class="result-image">
-                    <img src="{{ analysis.flood_mask.url }}" alt="Маска затопления" class="flood-mask-image">
-                </div>
-                <div class="card-actions">
-                    <a href="{{ analysis.flood_mask.url }}" class="btn btn-sm btn-primary" download>Скачать</a>
+                <h3>Площади</h3>
+                <div class="flood-stats">
+                    <div class="stat-item"><div class="stat-label">Площадь воды только по DEM:</div><div class="stat-value">{{ analysis.area_only_dem|floatformat:2 }} км²</div></div>
+                    <div class="stat-item"><div class="stat-label">Площадь воды только по снимку (MNDWI):</div><div class="stat-value">{{ analysis.area_only_mndwi|floatformat:2 }} км²</div></div>
+                    <div class="stat-item"><div class="stat-label">Совпадающая площадь (DEM и снимок):</div><div class="stat-value">{{ analysis.area_both|floatformat:2 }} км²</div></div>
+                    <div class="stat-item"><div class="stat-label">Площадь разности (не совпадения):</div><div class="stat-value">{{ analysis.area_only_dem|add:analysis.area_only_mndwi|floatformat:2 }} км²</div></div>
+                    <div class="stat-item"><div class="stat-label">Общая площадь воды по снимку:</div><div class="stat-value">{{ analysis.flooded_area_sqkm|floatformat:2 }} км²</div></div>
                 </div>
             </div>
-            {% endif %}
-            
             <div class="result-card">
-                <h3>Информация о затоплении</h3>
-                <div class="flood-stats">
-                    <div class="stat-item">
-                        <div class="stat-label">Площадь затопления:</div>
-                        <div class="stat-value">{{ analysis.flooded_area_sqkm|floatformat:2 }} км²</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-label">Сравнение с базовым слоем:</div>
-                        <div class="stat-value">{{ analysis.compared_with_base|yesno:"Выполнено,Не выполнено" }}</div>
-                    </div>
-                </div>
+                <h3>Скачать маски и слои</h3>
+                <ul>
+                    {% if analysis.dem_mask_path %}<li><a href="{{ analysis.dem_mask_path }}" download>Маска воды DEM (TIFF)</a></li>{% endif %}
+                    {% if analysis.mndwi_mask_path %}<li><a href="{{ analysis.mndwi_mask_path }}" download>Маска воды MNDWI (TIFF)</a></li>{% endif %}
+                    {% if analysis.only_dem_path %}<li><a href="{{ analysis.only_dem_path }}" download>Вода только по DEM (GeoJSON)</a></li>{% endif %}
+                    {% if analysis.only_mndwi_path %}<li><a href="{{ analysis.only_mndwi_path }}" download>Вода только по снимку (GeoJSON)</a></li>{% endif %}
+                    {% if analysis.both_path %}<li><a href="{{ analysis.both_path }}" download>Совпадающая вода (GeoJSON)</a></li>{% endif %}
+                </ul>
             </div>
         </div>
         
         <div class="map-preview">
-            <h3>Предпросмотр на карте</h3>
+            <h3>Карта сравнения</h3>
             <div id="map" class="analysis-map"></div>
+            <div class="layer-toggles">
+                <label><input type="checkbox" id="layer-dem" checked> Вода по DEM</label>
+                <label><input type="checkbox" id="layer-mndwi" checked> Вода по снимку</label>
+                <label><input type="checkbox" id="layer-both" checked> Совпадающая вода</label>
+            </div>
         </div>
     </div>
     {% elif analysis.status == 'processing' %}
@@ -470,4 +470,74 @@
     checkAnalysisStatus();
 </script>
 {% endif %}
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var map = L.map('map').setView([45, 39], 9);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    var layers = {
+        'only_dem': null,
+        'only_mndwi': null,
+        'both': null
+    };
+
+    fetch('/api/flood-analysis/{{ analysis.id }}/masks-geojson/')
+        .then(r => r.json())
+        .then(data => {
+            // Группируем по типу маски
+            var grouped = {only_dem: [], only_mndwi: [], both: []};
+            data.features.forEach(f => {
+                grouped[f.properties.mask_type].push(f);
+            });
+            // Добавляем слои
+            Object.keys(grouped).forEach(function(type) {
+                if (grouped[type].length > 0) {
+                    layers[type] = L.geoJSON({type: 'FeatureCollection', features: grouped[type]}, {
+                        style: function(feature) {
+                            return {
+                                color: feature.properties.color,
+                                fillColor: feature.properties.color,
+                                fillOpacity: 0.3,
+                                weight: 2
+                            };
+                        },
+                        onEachFeature: function(feature, layer) {
+                            layer.bindPopup('Тип: ' + feature.properties.mask_type);
+                        }
+                    }).addTo(map);
+                }
+            });
+            // Центрируем карту на результирующем слое
+            var allBounds = [];
+            Object.values(layers).forEach(function(l) {
+                if (l) {
+                    try { allBounds.push(l.getBounds()); } catch(e) {}
+                }
+            });
+            if (allBounds.length > 0) {
+                var bounds = allBounds[0];
+                for (var i = 1; i < allBounds.length; i++) {
+                    bounds = bounds.extend(allBounds[i]);
+                }
+                map.fitBounds(bounds);
+            }
+        });
+
+    // Переключатели слоёв
+    document.getElementById('layer-dem').addEventListener('change', function(e) {
+        if (layers.only_dem) { e.target.checked ? map.addLayer(layers.only_dem) : map.removeLayer(layers.only_dem); }
+    });
+    document.getElementById('layer-mndwi').addEventListener('change', function(e) {
+        if (layers.only_mndwi) { e.target.checked ? map.addLayer(layers.only_mndwi) : map.removeLayer(layers.only_mndwi); }
+    });
+    document.getElementById('layer-both').addEventListener('change', function(e) {
+        if (layers.both) { e.target.checked ? map.addLayer(layers.both) : map.removeLayer(layers.both); }
+    });
+});
+</script>
 {% endblock %}

@@ -90,6 +90,7 @@ INSTALLED_APPS = [
     'django_celery_beat',  # Для планирования задач Celery
     'corsheaders',  # Для CORS
     'flooddata',  # Наше приложение для работы с данными о затоплениях
+    'background_task',  # Для фоновых задач
 ]
 
 # Настройка TEMPLATES
@@ -149,18 +150,16 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20,
 }
 
-# Настройки Celery
-CELERY_BROKER_URL = 'redis://127.0.0.1:6379/0'
-CELERY_RESULT_BACKEND = 'redis://127.0.0.1:6379/0'
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = 'Europe/Moscow'
-CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 минут
-CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
-CELERY_BROKER_CONNECTION_MAX_RETRIES = 10
-CELERY_BROKER_CONNECTION_RETRY = True
+# Настройки кэша (если нужен Redis)
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': 'redis://127.0.0.1:6379/1',
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        }
+    }
+}
 
 # CORS настройки
 CORS_ALLOW_ALL_ORIGINS = True  # В продакшене лучше указать конкретные домены 

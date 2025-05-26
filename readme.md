@@ -71,10 +71,12 @@ SECRET_KEY=your-secret-key
 DATABASE_URL=postgis://user:password@localhost:5432/floodportal
 ```
 
-5. Примените миграции и создайте суперпользователя:
+5. Примените миграции и создайте суперпользователя По:
 ```
+python manage.py makemigrations
 python manage.py migrate
 python manage.py createsuperuser
+
 ```
 
 6. Запустите сервер разработки:

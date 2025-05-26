@@ -130,6 +130,10 @@
         <input type="checkbox" id="floodAnalyses">
         <label for="floodAnalyses">Результаты анализов</label>
     </div>
+    <div class="layer-control">
+        <input type="checkbox" id="analysisMasks">
+        <label for="analysisMasks">Маски анализов</label>
+    </div>
     <hr>
     <a href="{% url 'home' %}" class="btn btn-secondary map-back-btn"><i class="material-icons">arrow_back</i> На главную</a>
 </div>
@@ -159,6 +163,18 @@
     <div class="legend-item">
         <div class="legend-color" style="background-color: #8A2BE2; opacity: 0.5;"></div>
         <span>Результаты анализов</span>
+    </div>
+    <div class="legend-item">
+        <div class="legend-color" style="background-color: #1f77b4;"></div>
+        <span>Вода только по DEM</span>
+    </div>
+    <div class="legend-item">
+        <div class="legend-color" style="background-color: #d62728;"></div>
+        <span>Вода только по снимку</span>
+    </div>
+    <div class="legend-item">
+        <div class="legend-color" style="background-color: #2ca02c;"></div>
+        <span>Совпадающая вода</span>
     </div>
 </div>
 {% endblock %}
@@ -201,6 +217,7 @@
     var floodEventsLayer = L.layerGroup().addTo(map);
     var measurementPointsLayer = L.layerGroup().addTo(map);
     var floodAnalysesLayer = L.layerGroup();
+    var analysisMasksLayer = L.layerGroup().addTo(map);
     
     // Функция для загрузки данных
     function loadData() {
@@ -312,10 +329,10 @@
         
         // Загрузка результатов анализов затопления
         if (document.getElementById('floodAnalyses').checked) {
+            floodAnalysesLayer.clearLayers();
             fetch(API_BASE_URL + 'flood-analyses/')
                 .then(response => response.json())
                 .then(data => {
-                    floodAnalysesLayer.clearLayers();
                     if (data.features && data.features.length > 0) {
                         L.geoJSON(data, {
                             style: function(feature) {
@@ -343,6 +360,40 @@
         } else {
             map.removeLayer(floodAnalysesLayer);
         }
+        
+        // Загрузка масок анализов
+        if (document.getElementById('analysisMasks').checked) {
+            analysisMasksLayer.clearLayers();
+            // Получаем список завершённых анализов через API (или через отдельный endpoint, здесь пример через /api/flood-analyses/)
+            fetch('/api/flood-analyses-list/')
+                .then(response => response.json())
+                .then(list => {
+                    // Для каждого анализа подгружаем маски
+                    list.forEach(function(analysis) {
+                        fetch('/api/flood-analysis/' + analysis.id + '/masks-geojson/')
+                            .then(r => r.json())
+                            .then(data => {
+                                if (data.features && data.features.length > 0) {
+                                    L.geoJSON(data, {
+                                        style: function(feature) {
+                                            return {
+                                                color: feature.properties.color,
+                                                fillColor: feature.properties.color,
+                                                fillOpacity: 0.3,
+                                                weight: 2
+                                            };
+                                        },
+                                        onEachFeature: function(feature, layer) {
+                                            layer.bindPopup('Тип: ' + feature.properties.mask_type + '<br><a href="/analyses/' + feature.properties.analysis_id + '/">Подробнее</a>');
+                                        }
+                                    }).addTo(analysisMasksLayer);
+                                }
+                            });
+                    });
+                });
+        } else {
+            analysisMasksLayer.clearLayers();
+        }
     }
     
     // Обработчики событий для чекбоксов
@@ -350,6 +401,7 @@
     document.getElementById('floodEvents').addEventListener('change', loadData);
     document.getElementById('measurementPoints').addEventListener('change', loadData);
     document.getElementById('floodAnalyses').addEventListener('change', loadData);
+    document.getElementById('analysisMasks').addEventListener('change', loadData);
     
     // Загрузка данных при загрузке страницы
     loadData();

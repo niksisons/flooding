@@ -75,7 +75,7 @@ class FloodAnalysisForm(forms.ModelForm):
     """Форма для запуска анализа затопления"""
     class Meta:
         model = FloodAnalysis
-        fields = ['name', 'dem_file', 'satellite_image']
+        fields = ['name', 'dem_file', 'green_band_image', 'swir2_band_image']
     
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
@@ -86,9 +86,8 @@ class FloodAnalysisForm(forms.ModelForm):
             if user.is_staff:
                 # Для админа - все файлы и активные базовые слои
                 self.fields['dem_file'].queryset = DEMFile.objects.filter(is_active=True)
-                self.fields['satellite_image'].queryset = SatelliteImage.objects.filter(
-                    status__in=['new', 'completed']
-                )
+                self.fields['green_band_image'].queryset = SatelliteImage.objects.all()
+                self.fields['swir2_band_image'].queryset = SatelliteImage.objects.all()
             else:
                 # Для обычного пользователя - свои файлы и общие базовые слои
                 self.fields['dem_file'].queryset = DEMFile.objects.filter(
@@ -96,7 +95,5 @@ class FloodAnalysisForm(forms.ModelForm):
                 ).filter(
                     models.Q(uploaded_by=user) | models.Q(is_base_layer=True)
                 )
-                self.fields['satellite_image'].queryset = SatelliteImage.objects.filter(
-                    uploaded_by=user,
-                    status__in=['new', 'completed']
-                )
+                self.fields['green_band_image'].queryset = SatelliteImage.objects.filter(uploaded_by=user)
+                self.fields['swir2_band_image'].queryset = SatelliteImage.objects.filter(uploaded_by=user)

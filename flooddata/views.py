@@ -20,10 +20,14 @@ import json
 from django.urls import reverse
 from .forms import (UserRegistrationForm, DEMFileUploadForm, 
                   SatelliteImageUploadForm, FloodAnalysisForm)
+from .tasks import process_flood_analysis_bg
 
 from .serializers import (FloodZoneSerializer, FloodEventSerializer,
                          MeasurementPointSerializer, WaterLevelMeasurementSerializer)
+import logging
+from django.views.decorators.csrf import csrf_exempt
 
+logger = logging.getLogger(__name__)
 # Простой класс разрешений
 class IsAdminOrReadOnly(permissions.BasePermission):
     def has_permission(self, request, view):
@@ -198,26 +202,18 @@ def upload_satellite_image(request):
 def analyze_view(request):
     """Представление для запуска анализа затопления"""
     if request.method == "POST":
-        form = FloodAnalysisForm(request.POST, user=request.user)
+        form = FloodAnalysisForm(request.POST, request.FILES, user=request.user)
         if form.is_valid():
             analysis = form.save(commit=False)
             analysis.created_by = request.user
             analysis.status = 'pending'
             analysis.save()
-            
-            # Запускаем задачу обработки в фоне через Celery
-            from .tasks import process_flood_analysis
-            process_flood_analysis.delay(analysis.id)
-            
+            process_flood_analysis_bg(analysis.id)
             messages.success(request, f"Анализ затопления '{analysis.name}' поставлен в очередь")
             return redirect('analysis_list')
     else:
         form = FloodAnalysisForm(user=request.user)
-    
-    context = {
-        'form': form,
-    }
-    
+    context = {'form': form}
     return render(request, "analyze.html", context)
 
 @login_required
@@ -257,38 +253,21 @@ def process_analysis(request, analysis_id):
     """Запуск обработки анализа"""
     try:
         analysis = get_object_or_404(FloodAnalysis, pk=analysis_id)
-        
-        # Проверка прав доступа - только владелец или админ
         if analysis.created_by != request.user and not request.user.is_staff:
             messages.error(request, "У вас нет прав для запуска этого анализа")
             return redirect('analysis_list')
-        
-        # Проверка статуса анализа
         if analysis.status not in ['pending', 'error']:
             messages.error(request, "Этот анализ уже обрабатывается или завершен")
             return redirect('analysis_detail', analysis_id=analysis_id)
-        
-        # Проверяем наличие необходимых файлов
-        if not analysis.dem_file or not analysis.satellite_image:
-            messages.error(request, "Отсутствуют необходимые файлы для анализа")
+        if not analysis.dem_file or not analysis.green_band_image or not analysis.swir2_band_image:
+            messages.error(request, "Отсутствуют необходимые файлы для анализа (DEM, Green, SWIR2)")
             return redirect('analysis_detail', analysis_id=analysis_id)
-        
-        # Обновляем статус перед запуском
         analysis.status = 'processing'
         analysis.error_message = ''
         analysis.save()
-        
-        # Запускаем задачу обработки в фоне через Celery
-        from .tasks import process_flood_analysis
-        task = process_flood_analysis.delay(analysis.id)
-        
-        # Сохраняем ID задачи для отслеживания
-        analysis.task_id = task.id
-        analysis.save()
-        
+        process_flood_analysis_bg(analysis.id)
         messages.success(request, f"Анализ '{analysis.name}' запущен в обработку")
         return redirect('analysis_detail', analysis_id=analysis_id)
-        
     except Exception as e:
         logger.error(f"Ошибка при запуске анализа {analysis_id}: {str(e)}")
         messages.error(request, f"Произошла ошибка при запуске анализа: {str(e)}")
@@ -356,3 +335,50 @@ def flood_analysis_geojson(request):
                    fields=('name', 'created_at', 'flooded_area_sqkm'))
     
     return JsonResponse(json.loads(data), safe=False)
+
+@login_required
+def flood_analysis_masks_geojson(request, analysis_id):
+    """Возвращает объединённый GeoJSON с масками only_dem, only_mndwi, both для анализа"""
+    analysis = get_object_or_404(FloodAnalysis, pk=analysis_id)
+    # Проверка прав
+    if analysis.created_by != request.user and not request.user.is_staff:
+        return JsonResponse({'error': 'Нет доступа'}, status=403)
+    features = []
+    color_map = {
+        'only_dem': '#1f77b4',      # синий
+        'only_mndwi': '#d62728',    # красный
+        'both': '#2ca02c',          # зелёный
+    }
+    for mask_type, path_field in [('only_dem', analysis.only_dem_path),
+                                  ('only_mndwi', analysis.only_mndwi_path),
+                                  ('both', analysis.both_path)]:
+        if path_field:
+            # Преобразуем MEDIA_URL в абсолютный путь
+            geojson_path = os.path.join(settings.MEDIA_ROOT, path_field.replace(settings.MEDIA_URL, ''))
+            if os.path.exists(geojson_path):
+                with open(geojson_path, encoding='utf-8') as f:
+                    gj = json.load(f)
+                    for feat in gj.get('features', []):
+                        feat['properties']['mask_type'] = mask_type
+                        feat['properties']['color'] = color_map[mask_type]
+                        feat['properties']['analysis_id'] = analysis.id
+                        features.append(feat)
+    return JsonResponse({
+        'type': 'FeatureCollection',
+        'features': features
+    })
+
+@csrf_exempt
+def flood_analyses_list(request):
+    """API: список завершённых анализов для карты (id, name, created_at)"""
+    if not request.user.is_authenticated:
+        return JsonResponse([], safe=False)
+    if request.user.is_staff:
+        analyses = FloodAnalysis.objects.filter(status='completed')
+    else:
+        analyses = FloodAnalysis.objects.filter(status='completed', created_by=request.user)
+    result = [
+        {'id': a.id, 'name': a.name, 'created_at': a.created_at.isoformat()}
+        for a in analyses
+    ]
+    return JsonResponse(result, safe=False)

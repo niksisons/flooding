@@ -175,8 +175,9 @@ class FloodAnalysis(models.Model):
     name = models.CharField(max_length=255, default="Анализ затопления", verbose_name="Название анализа")
     dem_file = models.ForeignKey(DEMFile, on_delete=models.CASCADE, 
                                 related_name="analyses", verbose_name="DEM файл")
-    satellite_image = models.ForeignKey(SatelliteImage, on_delete=models.CASCADE, 
-                                       related_name="analyses", verbose_name="Космический снимок")
+    satellite_image = models.ForeignKey(SatelliteImage, on_delete=models.SET_NULL, null=True, blank=True, related_name="analyses", verbose_name="Космический снимок")
+    green_band_image = models.ForeignKey(SatelliteImage, on_delete=models.SET_NULL, null=True, blank=True, related_name="green_band_analyses", verbose_name="Канал Green (Band 3)")
+    swir2_band_image = models.ForeignKey(SatelliteImage, on_delete=models.SET_NULL, null=True, blank=True, related_name="swir2_band_analyses", verbose_name="Канал SWIR2 (Band 11)")
     flood_mask = models.FileField(upload_to='analysis_results/', null=True, blank=True, 
                                  verbose_name="Маска затопления")
     flood_vector = models.MultiPolygonField(srid=4326, null=True, blank=True, 
@@ -198,7 +199,15 @@ class FloodAnalysis(models.Model):
     error_message = models.TextField(blank=True, verbose_name="Сообщение об ошибке")
     flooded_area_sqkm = models.FloatField(null=True, blank=True, verbose_name="Площадь затопления (кв.км)")
     compared_with_base = models.BooleanField(default=False, verbose_name="Сравнено с базовым слоем")
-    task_id = models.CharField(max_length=255, null=True, blank=True, verbose_name="ID задачи Celery")
+    # Новые поля для хранения путей к маскам и площадям
+    dem_mask_path = models.CharField(max_length=512, null=True, blank=True, verbose_name="Путь к маске воды DEM")
+    mndwi_mask_path = models.CharField(max_length=512, null=True, blank=True, verbose_name="Путь к маске воды MNDWI")
+    only_dem_path = models.CharField(max_length=512, null=True, blank=True, verbose_name="Путь к GeoJSON только DEM")
+    only_mndwi_path = models.CharField(max_length=512, null=True, blank=True, verbose_name="Путь к GeoJSON только снимок")
+    both_path = models.CharField(max_length=512, null=True, blank=True, verbose_name="Путь к GeoJSON совпадающие")
+    area_only_dem = models.FloatField(null=True, blank=True, verbose_name="Площадь воды только DEM (кв.км)")
+    area_only_mndwi = models.FloatField(null=True, blank=True, verbose_name="Площадь воды только снимок (кв.км)")
+    area_both = models.FloatField(null=True, blank=True, verbose_name="Площадь совпадающей воды (кв.км)")
     
     class Meta:
         verbose_name = "Анализ затопления"
