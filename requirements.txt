@@ -59,6 +59,7 @@ pysheds
 matplotlib
 whitenoise
 gunicorn
+richdem
 
 # Новые зависимости
 django-background-tasks

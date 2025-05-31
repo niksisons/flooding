@@ -199,48 +199,47 @@ def export_flood_data(start_date, end_date, format='geojson'):
         logger.error(f"Ошибка при экспорте данных: {str(e)}")
         raise
 
-def hydrological_dem_correction(dem_path, output_dem_path=None, output_acc_path=None):
+def hydrological_dem_correction(dem_path, output_dem_path=None, output_acc_path=None, already_filled=False):
     """
-    Гидрологическая коррекция ЦМП (DEM) с помощью pysheds.
+    Гидрологическая коррекция ЦМП (DEM) с помощью WhiteboxTools.
+    Если already_filled=True, пропускает fill_depressions и сразу считает аккумуляцию.
     Args:
         dem_path: путь к исходному DEM (GeoTIFF)
         output_dem_path: путь для сохранения скорректированного DEM (опционально)
         output_acc_path: путь для сохранения карты аккумуляции (опционально)
+        already_filled: если True, DEM уже заполнен (filled), не выполнять fill_depressions
     Returns:
         dict с numpy-массивами скорректированного DEM и аккумуляции
     """
     try:
-        from pysheds.grid import Grid
+        from whitebox.whitebox_tools import WhiteboxTools
         import numpy as np
+        import rasterio
         import os
-        
-        grid = Grid.from_raster(dem_path)
-        dem = grid.read_raster(dem_path)
-
-        # 1. Fill pits
-        pit_filled_dem = grid.fill_pits(dem)
-        # 2. Fill depressions
-        flooded_dem = grid.fill_depressions(pit_filled_dem)
-        # 3. Resolve flats
-        inflated_dem = grid.resolve_flats(flooded_dem)
-        # 4. Flow direction
-        fdir = grid.flowdir(inflated_dem)
-        # 5. Accumulation
-        acc = grid.accumulation(fdir)
-
-        # Сохраняем скорректированный DEM
-        if output_dem_path:
-            grid.save_raster(output_dem_path, inflated_dem, dtype='float32')
-        # Сохраняем аккумуляцию
-        if output_acc_path:
-            grid.save_raster(output_acc_path, acc, dtype='float32')
-
+        wbt = WhiteboxTools()
+        workdir = os.path.dirname(output_dem_path or dem_path)
+        wbt.set_working_dir(workdir)
+        filled_dem = output_dem_path or os.path.join(workdir, 'filled_dem_tmp.tif')
+        acc_path = output_acc_path or os.path.join(workdir, 'accumulation_tmp.tif')
+        if already_filled:
+            # DEM уже заполнен, просто копируем файл если нужно
+            if output_dem_path and dem_path != output_dem_path:
+                import shutil
+                shutil.copyfile(dem_path, output_dem_path)
+            filled_dem = dem_path if not output_dem_path else output_dem_path
+        else:
+            wbt.fill_depressions(dem=dem_path, output=filled_dem)
+        wbt.d8_flow_accumulation(i=filled_dem, output=acc_path)
+        with rasterio.open(filled_dem) as src:
+            filled = src.read(1)
+        with rasterio.open(acc_path) as src:
+            acc = src.read(1)
         return {
-            'corrected_dem': inflated_dem,
+            'corrected_dem': filled,
             'accumulation': acc
         }
     except Exception as e:
-        logger.error(f"Ошибка гидрологической коррекции DEM: {str(e)}")
+        logger.error(f"Ошибка гидрологической коррекции DEM (whitebox): {str(e)}")
         raise
 
 def compare_dem_with_satellite(dem_path, satellite_mask_path, threshold=2.0, diff_output_path=None):
@@ -398,59 +397,66 @@ def create_flood_mask_vector(mask_path, output_vector_path=None, min_area=100):
         output_vector_path: путь для сохранения векторного слоя (опционально)
         min_area: минимальная площадь полигона в пикселях
     Returns:
-        GeoJSON строка с полигонами затопления и статистика
+        dict с GeoJSON, площадью, количеством полигонов и путем к файлу
     """
     try:
         with rasterio.open(mask_path) as src:
-            # Читаем маску
             image = src.read(1)
-            # Зоны со значением 1 - затопленные территории
-            mask = image == 1
-            
-            # Получаем полигоны из растра
-            results = (
-                {'properties': {'value': value}, 'geometry': s}
-                for i, (s, value) in enumerate(shapes(image, mask=mask, transform=src.transform))
-            )
-            
-            # Преобразуем в GeoDataFrame
-            geoms = list(results)
-            gdf = gpd.GeoDataFrame.from_features(geoms, crs=src.crs)
-            
-            # Фильтруем маленькие полигоны
-            if 'geometry' in gdf.columns:
-                # Вычисляем площадь полигонов в пикселях
-                gdf['area_px'] = gdf.geometry.area / (src.transform.a * src.transform.e)
-                gdf = gdf[gdf.area_px > min_area]
-                
-                # Вычисляем площадь в кв. км (при условии, что CRS в метрах)
-                gdf['area_sqkm'] = gdf.geometry.area / 1_000_000
-                
-                # Сохраняем векторный слой
-                if output_vector_path:
-                    gdf.to_file(output_vector_path, driver='GeoJSON')
-                
-                # Вычисляем общую площадь затопления
-                total_area_sqkm = gdf['area_sqkm'].sum()
-                
-                # Преобразуем в GeoJSON для Django
-                geojson_str = gdf.to_json()
-                
-                return {
-                    'vector_data': geojson_str,
-                    'total_area_sqkm': float(total_area_sqkm),
-                    'num_polygons': len(gdf),
-                    'vector_path': output_vector_path
-                }
-            else:
-                logger.warning("Не найдены полигоны затопления в маске")
+            mask = (image == 1)
+            # Проверка на пустую маску
+            if not np.any(mask):
+                logger.warning(f"Маска {mask_path} содержит только нули, векторизация невозможна.")
                 return {
                     'vector_data': None,
                     'total_area_sqkm': 0.0,
                     'num_polygons': 0,
                     'vector_path': None
                 }
-    
+            # Векторизация
+            results = (
+                {'properties': {'value': value}, 'geometry': s}
+                for s, value in shapes(image, mask=mask, transform=src.transform)
+                if value == 1
+            )
+            geoms = list(results)
+            if not geoms:
+                logger.warning(f"Векторизация: не найдено полигонов для {mask_path}")
+                return {
+                    'vector_data': None,
+                    'total_area_sqkm': 0.0,
+                    'num_polygons': 0,
+                    'vector_path': None
+                }
+            gdf = gpd.GeoDataFrame.from_features(geoms, crs=src.crs)
+            # Фильтрация по площади
+            if 'geometry' in gdf.columns:
+                gdf['area_px'] = gdf.geometry.area / abs(src.transform.a * src.transform.e)
+                gdf = gdf[gdf.area_px > min_area]
+            if gdf.empty:
+                logger.warning(f"Векторизация: все полигоны меньше min_area для {mask_path}")
+                return {
+                    'vector_data': None,
+                    'total_area_sqkm': 0.0,
+                    'num_polygons': 0,
+                    'vector_path': None
+                }
+            # Приведение CRS к EPSG:4326
+            if gdf.crs and gdf.crs.to_epsg() != 4326:
+                try:
+                    gdf = gdf.to_crs(epsg=4326)
+                except Exception as e:
+                    logger.error(f"Ошибка CRS при сохранении векторного слоя: {e}")
+            gdf['area_sqkm'] = gdf.geometry.area / 1_000_000
+            if output_vector_path:
+                gdf.to_file(output_vector_path, driver='GeoJSON')
+            total_area_sqkm = gdf['area_sqkm'].sum()
+            geojson_str = gdf.to_json()
+            return {
+                'vector_data': geojson_str,
+                'total_area_sqkm': float(total_area_sqkm),
+                'num_polygons': len(gdf),
+                'vector_path': output_vector_path
+            }
     except Exception as e:
         logger.error(f"Ошибка при создании векторного слоя затопления: {str(e)}")
         raise
@@ -517,3 +523,79 @@ def calculate_flood_statistics(flood_vector_path, admin_boundaries_path=None):
     except Exception as e:
         logger.error(f"Ошибка при расчете статистики затопления: {str(e)}")
         raise
+
+def rasterize_waterbody_vector(vector_path, reference_raster_path, output_mask_path):
+    """
+    Растеризация векторного слоя водоёмов (shp/geojson) в бинарную маску (1 — вода, 0 — суша)
+    Улучшено: CRS приводится к CRS снимка, обрезка по bbox снимка, логирование.
+    Args:
+        vector_path: путь к shp/geojson
+        reference_raster_path: путь к растру-эталону (DEM или снимок)
+        output_mask_path: путь для сохранения маски
+    Returns:
+        output_mask_path
+    """
+    import rasterio
+    from rasterio.features import rasterize
+    import geopandas as gpd
+    with rasterio.open(reference_raster_path) as ref:
+        transform = ref.transform
+        out_shape = (ref.height, ref.width)
+        crs = ref.crs
+        bounds = ref.bounds
+    gdf = gpd.read_file(vector_path)
+    logger.info(f"Векторный слой: {vector_path}, CRS: {gdf.crs}, Число полигонов: {len(gdf)}")
+    # Приведение CRS
+    if gdf.crs != crs:
+        gdf = gdf.to_crs(crs)
+        logger.info(f"Векторный слой приведён к CRS снимка: {crs}")
+    # Обрезка по bbox снимка
+    bbox = (bounds.left, bounds.bottom, bounds.right, bounds.top)
+    gdf_clip = gdf.cx[bbox[0]:bbox[2], bbox[1]:bbox[3]]
+    logger.info(f"После обрезки по bbox: {bbox}, осталось полигонов: {len(gdf_clip)}")
+    if gdf_clip.empty:
+        logger.warning(f"Векторный слой после обрезки пуст. Маска будет нулевая.")
+        mask = np.zeros(out_shape, dtype='uint8')
+    else:
+        shapes = ((geom, 1) for geom in gdf_clip.geometry if not geom.is_empty)
+        mask = rasterize(
+            shapes,
+            out_shape=out_shape,
+            transform=transform,
+            fill=0,
+            dtype='uint8'
+        )
+    with rasterio.open(
+        output_mask_path, 'w',
+        driver='GTiff',
+        height=out_shape[0],
+        width=out_shape[1],
+        count=1,
+        dtype='uint8',
+        crs=crs,
+        transform=transform
+    ) as dst:
+        dst.write(mask, 1)
+    logger.info(f"Маска водоёмов сохранена: {output_mask_path}, уникальные значения: {np.unique(mask)}")
+    return output_mask_path
+
+def create_permanent_water_mask_from_accumulation(accumulation_path, output_mask_path, threshold=1000):
+    """
+    Создаёт маску постоянных вод (реки/озёра) по flow accumulation.
+    Args:
+        accumulation_path: путь к растру аккумуляции (GeoTIFF)
+        output_mask_path: путь для сохранения маски
+        threshold: пороговое значение аккумуляции
+    Returns:
+        output_mask_path
+    """
+    import rasterio
+    import numpy as np
+    with rasterio.open(accumulation_path) as src:
+        acc = src.read(1)
+        mask = (acc >= threshold).astype(np.uint8)
+        profile = src.profile.copy()
+        profile.update({'count': 1, 'dtype': 'uint8', 'nodata': 0})  # Явно задаём nodata для uint8
+        with rasterio.open(output_mask_path, 'w', **profile) as dst:
+            dst.write(mask, 1)
+    return output_mask_path

@@ -70,9 +70,9 @@
             <div class="result-card">
                 <h3>Площади</h3>
                 <div class="flood-stats">
-                    <div class="stat-item"><div class="stat-label">Площадь воды только по DEM:</div><div class="stat-value">{{ analysis.area_only_dem|floatformat:2 }} км²</div></div>
-                    <div class="stat-item"><div class="stat-label">Площадь воды только по снимку (MNDWI):</div><div class="stat-value">{{ analysis.area_only_mndwi|floatformat:2 }} км²</div></div>
-                    <div class="stat-item"><div class="stat-label">Совпадающая площадь (DEM и снимок):</div><div class="stat-value">{{ analysis.area_both|floatformat:2 }} км²</div></div>
+                    <div class="stat-item"><div class="stat-label">Площадь постоянных вод (реки/озёра):</div><div class="stat-value">{{ analysis.area_only_dem|floatformat:2 }} км²</div></div>
+                    <div class="stat-item"><div class="stat-label">Площадь затопления (только по снимку):</div><div class="stat-value">{{ analysis.area_only_mndwi|floatformat:2 }} км²</div></div>
+                    <div class="stat-item"><div class="stat-label">Совпадающая площадь (пост. воды и снимок):</div><div class="stat-value">{{ analysis.area_both|floatformat:2 }} км²</div></div>
                     <div class="stat-item"><div class="stat-label">Площадь разности (не совпадения):</div><div class="stat-value">{{ analysis.area_only_dem|add:analysis.area_only_mndwi|floatformat:2 }} км²</div></div>
                     <div class="stat-item"><div class="stat-label">Общая площадь воды по снимку:</div><div class="stat-value">{{ analysis.flooded_area_sqkm|floatformat:2 }} км²</div></div>
                 </div>
@@ -80,10 +80,9 @@
             <div class="result-card">
                 <h3>Скачать маски и слои</h3>
                 <ul>
-                    {% if analysis.dem_mask_path %}<li><a href="{{ analysis.dem_mask_path }}" download>Маска воды DEM (TIFF)</a></li>{% endif %}
-                    {% if analysis.mndwi_mask_path %}<li><a href="{{ analysis.mndwi_mask_path }}" download>Маска воды MNDWI (TIFF)</a></li>{% endif %}
-                    {% if analysis.only_dem_path %}<li><a href="{{ analysis.only_dem_path }}" download>Вода только по DEM (GeoJSON)</a></li>{% endif %}
-                    {% if analysis.only_mndwi_path %}<li><a href="{{ analysis.only_mndwi_path }}" download>Вода только по снимку (GeoJSON)</a></li>{% endif %}
+                    {% if analysis.mndwi_mask_path %}<li><a href="{{ analysis.mndwi_mask_path }}" download>Маска воды по снимку (TIFF)</a></li>{% endif %}
+                    {% if analysis.only_dem_path %}<li><a href="{{ analysis.only_dem_path }}" download>Постоянные воды (реки/озёра, GeoJSON)</a></li>{% endif %}
+                    {% if analysis.only_mndwi_path %}<li><a href="{{ analysis.only_mndwi_path }}" download>Зона затопления (только снимок, GeoJSON)</a></li>{% endif %}
                     {% if analysis.both_path %}<li><a href="{{ analysis.both_path }}" download>Совпадающая вода (GeoJSON)</a></li>{% endif %}
                 </ul>
             </div>
@@ -93,8 +92,8 @@
             <h3>Карта сравнения</h3>
             <div id="map" class="analysis-map"></div>
             <div class="layer-toggles">
-                <label><input type="checkbox" id="layer-dem" checked> Вода по DEM</label>
-                <label><input type="checkbox" id="layer-mndwi" checked> Вода по снимку</label>
+                <label><input type="checkbox" id="layer-dem" checked> Постоянные воды</label>
+                <label><input type="checkbox" id="layer-mndwi" checked> Зона затопления</label>
                 <label><input type="checkbox" id="layer-both" checked> Совпадающая вода</label>
             </div>
         </div>

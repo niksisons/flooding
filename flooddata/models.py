@@ -208,6 +208,18 @@ class FloodAnalysis(models.Model):
     area_only_dem = models.FloatField(null=True, blank=True, verbose_name="Площадь воды только DEM (кв.км)")
     area_only_mndwi = models.FloatField(null=True, blank=True, verbose_name="Площадь воды только снимок (кв.км)")
     area_both = models.FloatField(null=True, blank=True, verbose_name="Площадь совпадающей воды (кв.км)")
+    permanent_water_method = models.CharField(
+        max_length=32,
+        choices=(
+            ('none', 'Не учитывать'),
+            ('vector', 'Векторный слой водоёмов'),
+            ('accumulation', 'Flow Accumulation (реки/озёра по аккумуляции)')
+        ),
+        default='none',
+        verbose_name="Способ постоянных вод"
+    )
+    waterbody_vector = models.ForeignKey('WaterbodyVector', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Векторный слой водоёмов")
+    accumulation_threshold = models.IntegerField(null=True, blank=True, default=1000, verbose_name="Порог flow accumulation")
     
     class Meta:
         verbose_name = "Анализ затопления"
@@ -216,3 +228,20 @@ class FloodAnalysis(models.Model):
     
     def __str__(self):
         return f"{self.name} ({self.created_at.strftime('%d.%m.%Y %H:%M')})"
+
+class WaterbodyVector(models.Model):
+    """Векторный слой водоёмов (реки, озёра)"""
+    name = models.CharField(max_length=255, default="Водоёмы", verbose_name="Название слоя")
+    shp_file_path = models.CharField(max_length=512, null=True, blank=True, verbose_name="Путь к SHP файлу")
+    description = models.TextField(blank=True, verbose_name="Описание")
+    upload_date = models.DateTimeField(auto_now_add=True, verbose_name="Дата загрузки")
+    uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="waterbody_vectors", verbose_name="Загружено")
+    is_active = models.BooleanField(default=True, verbose_name="Активен")
+
+    class Meta:
+        verbose_name = "Векторный слой водоёмов"
+        verbose_name_plural = "Векторные слои водоёмов"
+        ordering = ['-upload_date']
+
+    def __str__(self):
+        return f"{self.name} ({self.upload_date.strftime('%d.%m.%Y')})"

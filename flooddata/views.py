@@ -207,6 +207,10 @@ def analyze_view(request):
             analysis = form.save(commit=False)
             analysis.created_by = request.user
             analysis.status = 'pending'
+            # Явно присваиваем дополнительные поля, чтобы не было потери значения
+            analysis.permanent_water_method = form.cleaned_data.get('permanent_water_method') or 'none'
+            analysis.waterbody_vector = form.cleaned_data.get('waterbody_vector')
+            analysis.accumulation_threshold = form.cleaned_data.get('accumulation_threshold') or 1000
             analysis.save()
             process_flood_analysis_bg(analysis.id)
             messages.success(request, f"Анализ затопления '{analysis.name}' поставлен в очередь")
@@ -345,15 +349,19 @@ def flood_analysis_masks_geojson(request, analysis_id):
         return JsonResponse({'error': 'Нет доступа'}, status=403)
     features = []
     color_map = {
-        'only_dem': '#1f77b4',      # синий
-        'only_mndwi': '#d62728',    # красный
-        'both': '#2ca02c',          # зелёный
+        'only_dem': '#FFA500',      # оранжевый (осушение)
+        'only_pw': '#FFA500',       # оранжевый (осушение, поддержка старого имени)
+        'only_mndwi': '#3388ff',   # синий (затопление)
+        'both': '#8A2BE2',         # фиолетовый (постоянные воды)
     }
-    for mask_type, path_field in [('only_dem', analysis.only_dem_path),
-                                  ('only_mndwi', analysis.only_mndwi_path),
-                                  ('both', analysis.both_path)]:
+    # Поддержка старых и новых имён файлов
+    mask_paths = [
+        ('only_dem', analysis.only_dem_path or getattr(analysis, 'only_pw_path', None)),
+        ('only_mndwi', analysis.only_mndwi_path),
+        ('both', analysis.both_path),
+    ]
+    for mask_type, path_field in mask_paths:
         if path_field:
-            # Преобразуем MEDIA_URL в абсолютный путь
             geojson_path = os.path.join(settings.MEDIA_ROOT, path_field.replace(settings.MEDIA_URL, ''))
             if os.path.exists(geojson_path):
                 with open(geojson_path, encoding='utf-8') as f:
@@ -382,3 +390,30 @@ def flood_analyses_list(request):
         for a in analyses
     ]
     return JsonResponse(result, safe=False)
+
+@login_required
+def permanent_water_geojson(request):
+    """API: GeoJSON слоя постоянных вод для последнего завершённого анализа пользователя"""
+    if request.user.is_staff:
+        analysis = FloodAnalysis.objects.filter(status='completed').order_by('-created_at').first()
+    else:
+        analysis = FloodAnalysis.objects.filter(created_by=request.user, status='completed').order_by('-created_at').first()
+    if not analysis:
+        return JsonResponse({'type': 'FeatureCollection', 'features': []})
+    # Определяем путь к маске постоянных вод
+    output_dir = os.path.join(settings.MEDIA_ROOT, 'analysis_results')
+    base_name = f"{analysis.id}_{analysis.name.replace(' ', '_')}"
+    # Ищем маску постоянных вод (vector или accumulation)
+    possible_paths = [
+        os.path.join(output_dir, f"{base_name}_permanent_water_vector.tif"),
+        os.path.join(output_dir, f"{base_name}_permanent_water_acc.tif")
+    ]
+    mask_path = next((p for p in possible_paths if os.path.exists(p)), None)
+    if not mask_path:
+        return JsonResponse({'type': 'FeatureCollection', 'features': []})
+    # Векторизуем маску
+    from .utils import create_flood_mask_vector
+    result = create_flood_mask_vector(mask_path)
+    if result and result['vector_data']:
+        return JsonResponse(json.loads(result['vector_data']), safe=False)
+    return JsonResponse({'type': 'FeatureCollection', 'features': []})

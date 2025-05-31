@@ -68,6 +68,7 @@ urlpatterns = [
     path('api/flood-analysis/<int:analysis_id>/geojson/', views.flood_analysis_geojson, name='flood_analysis_geojson'),
     path('api/flood-analysis/<int:analysis_id>/masks-geojson/', views.flood_analysis_masks_geojson, name='flood_analysis_masks_geojson'),
     path('api/flood-analyses-list/', views.flood_analyses_list, name='flood_analyses_list'),
+    path('api/permanent-water/', views.permanent_water_geojson, name='permanent_water_geojson'),
 ]
 
 # Добавляем URL-шаблоны для статических и медиа-файлов

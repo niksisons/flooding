@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import (FloodZone, FloodEvent, MeasurementPoint, WaterLevelMeasurement, DEMFile, SatelliteImage, FloodAnalysis)
+from .models import (FloodZone, FloodEvent, MeasurementPoint, WaterLevelMeasurement, DEMFile, SatelliteImage, FloodAnalysis, WaterbodyVector)
 from django.utils.html import format_html
 from django.conf import settings
 import os
@@ -55,7 +55,11 @@ class DEMFileAdmin(admin.ModelAdmin):
             abs_acc = os.path.join(settings.MEDIA_ROOT, acc_path)
             os.makedirs(os.path.dirname(abs_corrected), exist_ok=True)
             hydrological_dem_correction(dem.file.path, abs_corrected, abs_acc)
-            self.message_user(request, f"Гидрологическая коррекция выполнена для {dem.name}")
+            dem.corrected_file.name = corrected_path
+            dem.accumulation_file.name = acc_path
+            dem.processed = True
+            dem.save()
+            self.message_user(request, f"Гидрологическая коррекция выполнена для {dem.file.name}")
     run_hydro_correction.short_description = "Выполнить гидрологическую коррекцию DEM"
     
     def set_as_base_layer(self, request, queryset):
@@ -126,3 +130,9 @@ class FloodAnalysisAdmin(admin.ModelAdmin):
     search_fields = ('name',)
     readonly_fields = ('created_at', 'flooded_area_sqkm')
     actions = []  # Удалены действия, связанные с Celery
+
+@admin.register(WaterbodyVector)
+class WaterbodyVectorAdmin(admin.ModelAdmin):
+    list_display = ('name', 'upload_date', 'uploaded_by', 'is_active')
+    search_fields = ('name',)
+    list_filter = ('is_active',)

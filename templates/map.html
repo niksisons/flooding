@@ -134,6 +134,10 @@
         <input type="checkbox" id="analysisMasks">
         <label for="analysisMasks">Маски анализов</label>
     </div>
+    <div class="layer-control">
+        <input type="checkbox" id="permanentWaterLayer">
+        <label for="permanentWaterLayer">Постоянные воды (реки/озёра)</label>
+    </div>
     <hr>
     <a href="{% url 'home' %}" class="btn btn-secondary map-back-btn"><i class="material-icons">arrow_back</i> На главную</a>
 </div>
@@ -146,7 +150,7 @@
     </div>
     <div class="legend-item">
         <div class="legend-color" style="background-color: #FFA500;"></div>
-        <span>Средний риск затопления</span>
+        <span>Зона осушения (только DEM)</span>
     </div>
     <div class="legend-item">
         <div class="legend-color" style="background-color: #FF0000;"></div>
@@ -165,16 +169,16 @@
         <span>Результаты анализов</span>
     </div>
     <div class="legend-item">
-        <div class="legend-color" style="background-color: #1f77b4;"></div>
-        <span>Вода только по DEM</span>
-    </div>
-    <div class="legend-item">
-        <div class="legend-color" style="background-color: #d62728;"></div>
-        <span>Вода только по снимку</span>
+        <div class="legend-color" style="background-color: #00BFFF;"></div>
+        <span>Зона затопления (только снимок)</span>
     </div>
     <div class="legend-item">
         <div class="legend-color" style="background-color: #2ca02c;"></div>
         <span>Совпадающая вода</span>
+    </div>
+    <div class="legend-item">
+        <div class="legend-color" style="background-color: #0077FF; opacity: 0.5;"></div>
+        <span>Постоянные воды (реки/озёра)</span>
     </div>
 </div>
 {% endblock %}
@@ -218,6 +222,7 @@
     var measurementPointsLayer = L.layerGroup().addTo(map);
     var floodAnalysesLayer = L.layerGroup();
     var analysisMasksLayer = L.layerGroup().addTo(map);
+    var permanentWaterLayer = L.layerGroup().addTo(map);
     
     // Функция для загрузки данных
     function loadData() {
@@ -377,7 +382,7 @@
                                     L.geoJSON(data, {
                                         style: function(feature) {
                                             return {
-                                                color: feature.properties.color,
+                                                color: feature.properties.color, // цвет из backend (оранжевый/голубой/зелёный)
                                                 fillColor: feature.properties.color,
                                                 fillOpacity: 0.3,
                                                 weight: 2
@@ -394,6 +399,32 @@
         } else {
             analysisMasksLayer.clearLayers();
         }
+        
+        // Загрузка слоя постоянных вод
+        if (document.getElementById('permanentWaterLayer').checked) {
+            permanentWaterLayer.clearLayers();
+            fetch('/api/permanent-water/')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.features && data.features.length > 0) {
+                        L.geoJSON(data, {
+                            style: function(feature) {
+                                return {
+                                    color: '#0077FF',
+                                    fillColor: '#0077FF',
+                                    fillOpacity: 0.5,
+                                    weight: 1
+                                };
+                            },
+                            onEachFeature: function(feature, layer) {
+                                layer.bindPopup('Постоянные воды (реки/озёра)');
+                            }
+                        }).addTo(permanentWaterLayer);
+                    }
+                });
+        } else {
+            permanentWaterLayer.clearLayers();
+        }
     }
     
     // Обработчики событий для чекбоксов
@@ -402,6 +433,7 @@
     document.getElementById('measurementPoints').addEventListener('change', loadData);
     document.getElementById('floodAnalyses').addEventListener('change', loadData);
     document.getElementById('analysisMasks').addEventListener('change', loadData);
+    document.getElementById('permanentWaterLayer').addEventListener('change', loadData);
     
     // Загрузка данных при загрузке страницы
     loadData();

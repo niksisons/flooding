@@ -57,6 +57,22 @@
                 <small>Выберите снимок для канала SWIR2 (Band 11, 20м, GeoTIFF)</small>
             </div>
             
+            <div class="form-group">
+                <label for="id_permanent_water_method"><b>Постоянные воды (реки/озёра):</b></label>
+                {{ form.permanent_water_method }}
+                <small class="form-text text-muted">Выберите способ определения постоянных водоёмов, которые будут исключены из анализа затопления.</small>
+            </div>
+            <div class="form-group" id="vector-group" style="display:none;">
+                {{ form.waterbody_vector.label_tag }}
+                {{ form.waterbody_vector }}
+                <small class="form-text text-muted">Выберите векторный слой водоёмов (shp/geojson).</small>
+            </div>
+            <div class="form-group" id="accumulation-group" style="display:none;">
+                {{ form.accumulation_threshold.label_tag }}
+                {{ form.accumulation_threshold }}
+                <small class="form-text text-muted">Порог flow accumulation (чем больше, тем только крупные реки/озёра). По умолчанию 1000.</small>
+            </div>
+            
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">Создать анализ</button>
                 <a href="{% url 'upload' %}" class="btn btn-secondary">Загрузить новые данные</a>
@@ -234,4 +250,21 @@
         border-color: #17a2b8;
     }
 </style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function updatePermanentWaterFields() {
+        var method = document.getElementById('id_permanent_water_method').value;
+        document.getElementById('vector-group').style.display = (method === 'vector') ? '' : 'none';
+        document.getElementById('accumulation-group').style.display = (method === 'accumulation') ? '' : 'none';
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+        var methodField = document.getElementById('id_permanent_water_method');
+        if (methodField) {
+            methodField.addEventListener('change', updatePermanentWaterFields);
+            updatePermanentWaterFields();
+        }
+    });
+</script>
 {% endblock %}
