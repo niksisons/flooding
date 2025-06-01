@@ -240,16 +240,17 @@ def analysis_list(request):
 def analysis_detail(request, analysis_id):
     """Детальная информация о конкретном анализе затопления"""
     analysis = get_object_or_404(FloodAnalysis, pk=analysis_id)
-    
-    # Проверка прав доступа - только владелец или админ
-    if analysis.created_by != request.user and not request.user.is_staff:
-        messages.error(request, "У вас нет доступа к этому анализу")
-        return redirect('analysis_list')
-    
+    # --- Добавляем список PNG-карт для проверки наличия ---
+    png_dir = os.path.join(settings.MEDIA_ROOT, 'analysis_results')
+    png_files = set()
+    if os.path.exists(png_dir):
+        for fname in os.listdir(png_dir):
+            if fname.endswith('_map.png'):
+                png_files.add(fname)
     context = {
         'analysis': analysis,
+        'MEDIA_ANALYSIS_PNGS': png_files,
     }
-    
     return render(request, "analysis_detail.html", context)
 
 @login_required

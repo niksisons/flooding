@@ -392,84 +392,6 @@
 {% endblock %}
 
 {% block scripts %}
-{% if analysis.status == 'completed' and analysis.flood_vector %}
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Инициализируем карту
-        const map = L.map('map').setView([55.7522, 37.6156], 10);
-        
-        // Добавляем базовый слой OpenStreetMap
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
-        
-        // Загружаем данные векторного слоя затопления
-        fetch('/geojson/flood-analyses/')
-            .then(response => response.json())
-            .then(data => {
-                // Добавляем слой затопления
-                const floodLayer = L.geoJSON(data, {
-                    style: {
-                        color: "#3498db",
-                        weight: 2,
-                        opacity: 0.7,
-                        fillColor: "#3498db",
-                        fillOpacity: 0.4
-                    },
-                    onEachFeature: function(feature, layer) {
-                        if (feature.properties) {
-                            layer.bindPopup(`
-                                <strong>${feature.properties.name}</strong><br>
-                                Дата: ${feature.properties.created_at}<br>
-                                Площадь: ${feature.properties.flooded_area_sqkm} км²
-                            `);
-                        }
-                    }
-                }).addTo(map);
-                
-                // Центрируем карту на слое затопления
-                map.fitBounds(floodLayer.getBounds());
-            })
-            .catch(error => {
-                console.error('Ошибка загрузки данных затопления:', error);
-            });
-    });
-</script>
-{% endif %}
-
-{% if analysis.status == 'pending' or analysis.status == 'processing' %}
-<script>
-    function checkAnalysisStatus() {
-        fetch('/api/flood-analysis/{{ analysis.id }}/status/')
-            .then(response => response.json())
-            .then(data => {
-                // Обновляем статус
-                document.querySelector('.badge').textContent = 
-                    data.status === 'pending' ? 'В очереди' :
-                    data.status === 'processing' ? 'В обработке' :
-                    data.status === 'completed' ? 'Завершено' : 'Ошибка';
-                
-                // Если анализ завершен или произошла ошибка
-                if (data.is_completed || data.has_error) {
-                    // Перезагружаем страницу для отображения результатов
-                    window.location.reload();
-                } else {
-                    // Продолжаем проверку статуса
-                    setTimeout(checkAnalysisStatus, 5000);
-                }
-            })
-            .catch(error => {
-                console.error('Ошибка при проверке статуса:', error);
-                setTimeout(checkAnalysisStatus, 5000);
-            });
-    }
-    
-    // Запускаем проверку статуса
-    checkAnalysisStatus();
-</script>
-{% endif %}
-
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -479,21 +401,35 @@ document.addEventListener('DOMContentLoaded', function() {
         attribution: '© OpenStreetMap'
     }).addTo(map);
 
+    // --- PNG overlay ---
+    const analysisId = '{{ analysis.id }}';
+    const analysisSlug = '{{ analysis.name|slugify }}';
+    const pngName = analysisId + '_' + analysisSlug + '_map.png';
+    const boundsName = analysisId + '_' + analysisSlug + '_map_bounds.json';
+    const pngUrl = '/media/analysis_results/' + pngName;
+    const boundsUrl = '/media/analysis_results/' + boundsName;
+    fetch(boundsUrl)
+        .then(r => r.json())
+        .then(data => {
+            if (data && data.bounds) {
+                var b = data.bounds;
+                var imageBounds = [[b[1], b[0]], [b[3], b[2]]]; // [[southWest], [northEast]]
+                L.imageOverlay(pngUrl, imageBounds, {opacity: 0.7, interactive: false}).addTo(map);
+            }
+        });
+
     var layers = {
         'only_dem': null,
         'only_mndwi': null,
         'both': null
     };
-
     fetch('/api/flood-analysis/{{ analysis.id }}/masks-geojson/')
         .then(r => r.json())
         .then(data => {
-            // Группируем по типу маски
             var grouped = {only_dem: [], only_mndwi: [], both: []};
             data.features.forEach(f => {
                 grouped[f.properties.mask_type].push(f);
             });
-            // Добавляем слои
             Object.keys(grouped).forEach(function(type) {
                 if (grouped[type].length > 0) {
                     layers[type] = L.geoJSON({type: 'FeatureCollection', features: grouped[type]}, {
@@ -526,8 +462,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 map.fitBounds(bounds);
             }
         });
-
-    // Переключатели слоёв
     document.getElementById('layer-dem').addEventListener('change', function(e) {
         if (layers.only_dem) { e.target.checked ? map.addLayer(layers.only_dem) : map.removeLayer(layers.only_dem); }
     });

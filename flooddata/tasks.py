@@ -86,8 +86,11 @@ def process_flood_analysis_bg(analysis_id):
             
             logger.info(f"Запуск hydrological_dem_correction для обрезанного DEM: {cropped_dem_path}")
             try:
-                # Передаем обрезанный DEM в hydrological_dem_correction
-                hydrological_dem_correction(cropped_dem_path, None, acc_path_output) 
+                # Получаем объект DEMFile и определяем already_filled по is_base_layer
+                dem_file_obj = analysis.dem_file
+                already_filled = getattr(dem_file_obj, 'is_base_layer', False)
+                # Передаем обрезанный DEM в hydrological_dem_correction с нужным флагом
+                hydrological_dem_correction(cropped_dem_path, None, acc_path_output, already_filled=already_filled)
                 logger.info(f"Создан файл аккумуляции: {acc_path_output}")
             except Exception as e:
                  logger.error(f"Ошибка при hydrological_dem_correction для {cropped_dem_path}: {e}")
@@ -415,11 +418,23 @@ def process_flood_analysis_bg(analysis_id):
         else:
             analysis.flood_vector = None
         analysis.save()
-        logger.info(f"Анализ {analysis_id} успешно завершен. Площадь воды по снимку: {analysis.flooded_area_sqkm:.2f} км2")
+
+        # --- 5. Генерируем PNG-карту с масками и сохраняем bounds ---
+        from .utils import render_analysis_masks_png
+        png_path = os.path.join(output_dir, f"{base_name}_map.png")
+        bounds_json_path = os.path.join(output_dir, f"{base_name}_map_bounds.json")
+        render_analysis_masks_png(
+            only_pw_geojson=only_pw_path_geojson,
+            only_mndwi_geojson=only_mndwi_path_geojson,
+            both_geojson=both_path_geojson,
+            output_png_path=png_path,
+            bounds_json_path=bounds_json_path
+        )
+        logger.info(f"PNG-карта с масками сохранена: {png_path}, bounds: {bounds_json_path}")
     except Exception as e:
         error_message = f"Ошибка при обработке анализа затопления:\n{traceback.format_exc()}"
         logger.error(error_message)
         if analysis:
             analysis.status = 'error'
             analysis.error_message = error_message
-            analysis.save() 
+            analysis.save()

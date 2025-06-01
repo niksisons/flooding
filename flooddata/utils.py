@@ -599,3 +599,53 @@ def create_permanent_water_mask_from_accumulation(accumulation_path, output_mask
         with rasterio.open(output_mask_path, 'w', **profile) as dst:
             dst.write(mask, 1)
     return output_mask_path
+
+def render_analysis_masks_png(only_pw_geojson, only_mndwi_geojson, both_geojson, output_png_path, bounds_json_path=None, crs='EPSG:4326', width=800, height=800):
+    """
+    Рендерит PNG-карту с масками анализа (осушение, затопление, совпадающая вода) и сохраняет bounds в WGS84.
+    only_pw_geojson, only_mndwi_geojson, both_geojson — пути к GeoJSON.
+    output_png_path — путь для сохранения PNG.
+    bounds_json_path — путь для сохранения bounds (minx, miny, maxx, maxy) в WGS84.
+    crs — проекция для отрисовки.
+    width, height — размер PNG.
+    """
+    import geopandas as gpd
+    import matplotlib.pyplot as plt
+    import os
+    import json
+    # Читаем маски
+    gdf_pw = gpd.read_file(only_pw_geojson) if only_pw_geojson and os.path.exists(only_pw_geojson) else None
+    gdf_mndwi = gpd.read_file(only_mndwi_geojson) if only_mndwi_geojson and os.path.exists(only_mndwi_geojson) else None
+    gdf_both = gpd.read_file(both_geojson) if both_geojson and os.path.exists(both_geojson) else None
+    # Определяем границы
+    all_gdfs = [gdf for gdf in [gdf_pw, gdf_mndwi, gdf_both] if gdf is not None and not gdf.empty]
+    if not all_gdfs:
+        return False
+    # Приводим CRS к WGS84 для bounds
+    for gdf in all_gdfs:
+        if gdf.crs and gdf.crs.to_string() != 'EPSG:4326':
+            gdf.to_crs('EPSG:4326', inplace=True)
+    total = all_gdfs[0].total_bounds
+    for gdf in all_gdfs[1:]:
+        b = gdf.total_bounds
+        total = [min(total[0], b[0]), min(total[1], b[1]), max(total[2], b[2]), max(total[3], b[3])]
+    bounds = total
+    # Сохраняем bounds в JSON, если нужно
+    if bounds_json_path:
+        with open(bounds_json_path, 'w', encoding='utf-8') as f:
+            json.dump({'bounds': bounds}, f)
+    # Рисуем PNG
+    fig, ax = plt.subplots(figsize=(width/100, height/100), dpi=100)
+    ax.set_axis_off()
+    ax.set_xlim(bounds[0], bounds[2])
+    ax.set_ylim(bounds[1], bounds[3])
+    if gdf_pw is not None and not gdf_pw.empty:
+        gdf_pw.plot(ax=ax, color='#FFA500', alpha=0.5, edgecolor='none', label='Осушение')
+    if gdf_mndwi is not None and not gdf_mndwi.empty:
+        gdf_mndwi.plot(ax=ax, color='#3388ff', alpha=0.5, edgecolor='none', label='Затопление')
+    if gdf_both is not None and not gdf_both.empty:
+        gdf_both.plot(ax=ax, color='#8A2BE2', alpha=0.5, edgecolor='none', label='Совпадающая вода')
+    plt.tight_layout(pad=0)
+    fig.savefig(output_png_path, bbox_inches='tight', pad_inches=0, transparent=True)
+    plt.close(fig)
+    return True
